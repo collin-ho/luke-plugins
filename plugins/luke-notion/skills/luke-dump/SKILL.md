@@ -1,6 +1,6 @@
 ---
 name: luke-dump
-description: Exhaustively enumerate a Notion data source beyond the hosted MCP's 100-row cap. Use when the user asks to audit a full board, export all tasks, count everything in a status, or otherwise needs completeness guarantees over a Notion DB with >100 rows. Internally also called by luke-tasks for domain-wide enumeration queries.
+description: Exhaustively enumerate a Notion data source beyond the hosted MCP's 100-row cap. Use when the user asks to dump, export, pull, get all, or audit; count everything in a status; or otherwise needs completeness guarantees over a Notion DB with >100 rows. Internally also called by luke-tasks for domain-wide enumeration queries.
 allowed-tools: mcp__luke-notion__dump-data-source, Read, Bash
 ---
 

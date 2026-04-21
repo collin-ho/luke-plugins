@@ -1,6 +1,6 @@
 {
   "name": "luke-notion",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Task and meeting workflow skills for Collin's canonical Notion workspace. MCP-first: uses Claude.ai's hosted Notion connector for most operations plus a bundled single-tool MCP server for exhaustive data-source queries that exceed the hosted cap.",
   "author": {
     "name": "Collin Hoben"
@@ -10,7 +10,9 @@
   "keywords": ["notion", "tasks", "meetings", "productivity"],
   "userConfig": {
     "NOTION_TOKEN": {
-      "description": "Notion internal integration token (starts with ntn_). Used by the bundled MCP server for paginated queries beyond the hosted MCP's 100-row cap. Create at https://www.notion.so/my-integrations and grant it access to the canonical DBs in this workspace via each DB's ••• menu → Connections.",
+      "type": "string",
+      "title": "Notion API Token",
+      "description": "Bearer token (starts with ntn_) used by the bundled MCP server for paginated queries past the hosted MCP's 100-row cap. Create at https://www.notion.so/my-integrations and connect it to the canonical DBs via each DB's ••• → Connections.",
       "sensitive": true
     }
   }
