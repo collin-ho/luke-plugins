@@ -82,3 +82,47 @@ test('flattenProp: unknown type → passed through unchanged', () => {
   const v = { type: 'some_future_type', custom: 'data' };
   assert.deepEqual(flattenProp(v), v);
 });
+
+import { normalizeDataSourceId } from './notion-dump.mjs';
+
+test('normalizeDataSourceId: accepts dashed UUID', () => {
+  assert.equal(
+    normalizeDataSourceId('b0d00fd8-eebb-434d-84c1-a652260fbe79'),
+    'b0d00fd8-eebb-434d-84c1-a652260fbe79'
+  );
+});
+
+test('normalizeDataSourceId: accepts undashed 32-char hex', () => {
+  assert.equal(
+    normalizeDataSourceId('b0d00fd8eebb434d84c1a652260fbe79'),
+    'b0d00fd8-eebb-434d-84c1-a652260fbe79'
+  );
+});
+
+test('normalizeDataSourceId: extracts from collection:// URI', () => {
+  assert.equal(
+    normalizeDataSourceId('collection://b0d00fd8-eebb-434d-84c1-a652260fbe79'),
+    'b0d00fd8-eebb-434d-84c1-a652260fbe79'
+  );
+});
+
+test('normalizeDataSourceId: extracts from collection:// URI (undashed inside)', () => {
+  assert.equal(
+    normalizeDataSourceId('collection://b0d00fd8eebb434d84c1a652260fbe79'),
+    'b0d00fd8-eebb-434d-84c1-a652260fbe79'
+  );
+});
+
+test('normalizeDataSourceId: rejects plain database URL (multi-source out of scope)', () => {
+  // A plain database URL (notion.so/<db-id>) without collection:// prefix
+  // should error — multi-source handling is out of scope for v0.2.0.
+  assert.throws(
+    () => normalizeDataSourceId('https://www.notion.so/4de35153f31d4427bc5a1c3b1c08648e'),
+    /data source|collection/i
+  );
+});
+
+test('normalizeDataSourceId: rejects garbage', () => {
+  assert.throws(() => normalizeDataSourceId('not-a-uuid'), /invalid|data source|collection/i);
+  assert.throws(() => normalizeDataSourceId(''), /required|empty|invalid/i);
+});
