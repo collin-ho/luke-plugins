@@ -44,7 +44,19 @@ The user may invoke this skill with:
 
 **If natural language** → use `mcp__claude_ai_Notion__notion-search` scoped to the Meetings data source (`collection://db2e5ca6-92b7-4e39-ab23-f4c496d2636c`) with the user's phrase as the query. Parse the returned candidates.
 
-**If structured filter** (e.g. "Pending" status, specific Domain) → use `mcp__claude_ai_Notion__notion-search` scoped to the Meetings data source, or `mcp__claude_ai_Notion__notion-query-database-view` on the Meetings DB (`9d019a9f-235f-4ecc-af82-8695a99859da`) with appropriate filter parameters.
+**If structured filter** (e.g. "pending meetings", "unreviewed", "to-review", "needs review", or nothing at all with an implicit recency-based filter) — the skill must treat the three legacy "needs review" states as equivalent:
+
+```
+Review Status IS null OR Review Status = "Unreviewed" OR Review Status = "Pending"
+```
+
+All three mean "has not been reviewed yet." `null` is the default state for newly-ingested meetings going forward. `Unreviewed` and `Pending` are legacy values left in the DB from earlier migrations — the skill no longer writes either (Rule 1 below) but must still surface them until they naturally drain.
+
+**Primary path:** attempt the filter directly in `mcp__claude_ai_Notion__notion-query-database-view` on the Meetings DB (`9d019a9f-235f-4ecc-af82-8695a99859da`). If the DSL supports the multi-value OR, use it.
+
+**Fallback path (if the DSL silently drops complex filters — see `feedback_mcp_view_filter_limits.md`):** (a) query for `Review Status IS null` via `notion-query-database-view`; (b) query `notion-search` scoped to the Meetings data source (`collection://db2e5ca6-92b7-4e39-ab23-f4c496d2636c`) with a broad recency filter; (c) filter the union in-memory for `Review Status IN ("Unreviewed", "Pending", null)`; (d) de-duplicate by page ID.
+
+Queries for already-reviewed or already-skipped meetings continue to use exact values (`Review Status = "Reviewed"` or `= "Skipped"`) — no OR required.
 
 **If nothing** → query recent meetings via `mcp__claude_ai_Notion__notion-search` scoped to the Meetings data source with an empty or broad query (limit to recent results).
 
