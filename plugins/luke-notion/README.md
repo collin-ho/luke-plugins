@@ -22,13 +22,13 @@ Task and meeting workflow skills for Collin's canonical Notion workspace. Pure M
 
 ## Typical flow
 
-1. `/luke-meeting-review <meeting URL or phrase>` → produces `tmp/meeting-reviews/<meeting_id>.md`
+1. `/luke-meeting-review <meeting URL or phrase>` → produces `~/.claude/luke/drafts/meeting-reviews/<meeting_id>.md`
 2. Review the draft, flip `ready_for_commit: true`
 3. `/luke-meeting-commit` → pushes tasks + meeting property updates to Notion
 
 ## Draft file location
 
-`luke-meeting-review` writes drafts to `tmp/meeting-reviews/<meeting_id>.md` relative to the current working directory. Run the skill from a consistent location if you want drafts to pile up in one place.
+`luke-meeting-review` writes drafts to `~/.claude/luke/drafts/meeting-reviews/<meeting_id>.md` — a user-global location independent of the Claude Code session's current working directory. `luke-meeting-commit` looks for drafts in the same place. Review and commit always find each other regardless of which repo your session is in.
 
 ## Notes
 

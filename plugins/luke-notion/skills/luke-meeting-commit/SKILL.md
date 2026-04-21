@@ -19,11 +19,13 @@ Pure-MCP writer that pushes a curated review draft to Notion. Requires `frontmat
 
 ### Step 1: Locate and read the draft
 
-If the user supplies a path, use it. Otherwise:
+If the user supplies a path, use it. Otherwise find the most recent draft in the user-global draft directory:
 
 ```bash
-ls -t tmp/meeting-reviews/*.md | head -1
+ls -t ~/.claude/luke/drafts/meeting-reviews/*.md | head -1
 ```
+
+This location is fixed — independent of the Claude Code session's current working directory. If no files exist there, bail with "No review drafts found. Run `/luke-meeting-review` first."
 
 Read the draft with the `Read` tool. Parse the YAML frontmatter (between `---` markers) and the body.
 

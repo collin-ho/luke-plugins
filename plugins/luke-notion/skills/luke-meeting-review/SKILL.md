@@ -97,7 +97,7 @@ This provides the full page properties and content needed for triage.
 
 **Local operations** (still required):
 - **Initiative resolution:** use `notion-search` scoped to `collection://28a0a1b7-d639-4e34-898f-e19415823dec` when you need to resolve an Initiative by name. Cache results in-session.
-- **Draft check:** look for an existing draft in `tmp/meeting-reviews/` matching this meeting ID (resume vs. new).
+- **Draft check:** look for an existing draft in `~/.claude/luke/drafts/meeting-reviews/` matching this meeting ID (resume vs. new). This is a user-global location — independent of Claude Code's current working directory.
 - **Carry-forward scan:** check for unresolved items from prior reviews of this meeting.
 
 **Before Step 2, check page properties for `recovered_from_url`.** If set, this row was restored from a Phase 7b migration source — surface the source URL in the Phase 1 triage output for user context, and NEVER propose trash on this row (it has already been recovered; the "empty" appearance is a content-shape difference, not missing content).
@@ -126,7 +126,7 @@ Both shapes carry the same semantic content. Parse whichever you encounter; if n
 
 Preserve the raw summary verbatim for the audit section at the bottom of the draft.
 
-**Overflow handling:** if the MCP response exceeds its token limit, the tool saves the full output to a file path printed in the error message. Read that file directly in sequential chunks until you've covered the entire content. The file convention is `tmp/recovery/source-<meeting_id>.txt` when you persist for later use.
+**Overflow handling:** if the MCP response exceeds its token limit, the tool saves the full output to a file path printed in the error message. Read that file directly in sequential chunks until you've covered the entire content. When you persist it for later use, save to `~/.claude/luke/recovery/source-<meeting_id>.txt` (`mkdir -p` the directory if needed).
 
 ### Step 4: Empty meeting fast-path (MCP-grounded only)
 
@@ -246,7 +246,7 @@ Then the **open-prompt escape hatch:**
 
 ### Step 9: Write the draft markdown
 
-Once all content is curated, assemble the full draft markdown inline and use the `Write` tool to save it to `tmp/meeting-reviews/<meeting_id>.md` relative to the current working directory.
+Once all content is curated, assemble the full draft markdown inline and use the `Write` tool to save it to `~/.claude/luke/drafts/meeting-reviews/<meeting_id>.md`. This is a user-global location — always the same path regardless of the Claude Code session's current working directory. If the directory doesn't yet exist, run `mkdir -p ~/.claude/luke/drafts/meeting-reviews` first (Bash tool).
 
 The frontmatter must be valid YAML between `---` markers. Required fields:
 
