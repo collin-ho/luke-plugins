@@ -25,7 +25,7 @@ All tasks live in a single consolidated database. Domain is derived from the Ini
 - **Priority** — P0, P1, P2, P3.
 - **Area** — multi-select (Coresynq tasks only).
 - **Client** — select (Rezzy tasks only).
-- **Domain** — derived from the Initiative name prefix (e.g., `Cogent – ClickUp` → `Cogent`). The schema also has a `Domain` rollup property, but MCP responses return `<omitted />` for rollups, so we derive Domain from the Initiative name string instead.
+- **Domain** — derived from the Initiative name prefix (e.g., `Cogent – ClickUp` → `Cogent`). The schema also has a `Domain` rollup property, but MCP responses return `<omitted />` for rollups, so we derive Domain from the Initiative name string instead. Note: the `<omitted />` behavior is hosted-MCP-only; `/luke-dump` (via the bundled REST MCP server) returns the full rollup value, so callers enumerating via `/luke-dump` can filter on `Domain[0]` directly.
 
 ## Routing
 
@@ -52,7 +52,7 @@ For queries where completeness matters — the user said "ALL", "EVERY", or a co
 | All untriaged (no Initiative) | `{"property": "Initiative", "relation": {"is_empty": true}}` |
 | All tasks touched since date | `{"property": "Last edited time", "last_edited_time": {"on_or_after": "2026-04-01"}}` |
 
-Domain filtering (e.g. "all Cogent tasks") typically requires filtering on the `Initiative` relation — since MCP returns `<omitted />` for the `Domain` rollup. Use `notion-search` to resolve Cogent initiative IDs first, then build a compound filter. For rough "all of domain X" queries when an exact initiative list isn't needed, fall back to a full dump + in-memory filter on Initiative name prefix.
+Domain filtering (e.g. "all Cogent tasks") typically requires filtering on the `Initiative` relation — since hosted MCP returns `<omitted />` for the `Domain` rollup. Use `notion-search` to resolve Cogent initiative IDs first, then build a compound filter. For rough "all of domain X" queries when an exact initiative list isn't needed, fall back to a full dump + in-memory filter on Initiative name prefix. Alternatively, enumerate via `/luke-dump` (which calls the Notion REST API directly) to get the real `Domain` rollup values and filter on-site.
 
 If a dump returns `partial: true` in the response, surface that to the user — the count is incomplete.
 
@@ -94,7 +94,7 @@ mcp__claude_ai_Notion__notion-search({
 })
 ```
 
-**Do NOT try to filter by the Domain rollup** — MCP returns `<omitted />` for rollup values.
+**Do NOT try to filter by the Domain rollup via hosted MCP** — hosted MCP returns `<omitted />` for rollup values. If you need Domain filtering, enumerate via `/luke-dump` (which returns the real rollup value) and filter in-memory.
 
 ### Intake / Untriaged Tasks
 
