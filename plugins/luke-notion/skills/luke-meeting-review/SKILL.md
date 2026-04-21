@@ -166,15 +166,100 @@ The signal MUST come from MCP content. Do NOT cross-reference SDK block counts o
 
 **Hard block:** if the page properties include a non-null `recovered_from_url`, do NOT propose skipping — surface the source URL to the user and let them decide.
 
-Only when conditions hold AND the row is not a recovered one, surface to the user:
+Only when conditions hold AND the row is not a recovered one, proceed with the fast-path flow below.
 
-> "This meeting looks empty — no transcript, no summary, no notes. Mark Review Status = Skipped?"
+#### 4a. Determine the proposed title (mandatory before any write)
 
-Wait for explicit user confirmation. On confirmation, set `Review Status: "Skipped"` via `notion-update-page` with `update_properties`. The row stays in the DB (easy to revisit) but is flagged as not-worth-reviewing.
+Before setting `Skipped`, the skill MUST end up with a human-readable Title on the row. Read both `Title` and `ai_title` properties from the page-properties payload already fetched in **Step 1** (`notion-fetch` on the meeting ID — Step 1 explicitly says: *"This provides the full page properties and content needed for triage."*). No extra MCP call is needed here.
+
+**Treat these values as sentinels (not usable as Title):**
+- `null`
+- empty string (`""`)
+- whitespace-only (`"   "`, `"\t"`, etc.)
+- the Notion placeholder glyph (`"‣"`)
+
+**Path A — existing Title is already real:** if the row's current `Title` property is NOT a sentinel, preserve it. Skip path B/C entirely. Proceed to 4b with `proposed_title = <current Title>` and an internal `preserved` flag set.
+
+**Path B — use `ai_title`:** else if `ai_title` is NOT a sentinel, set `proposed_title = ai_title`. Proceed to 4b.
+
+**Path C — ask the user:** else (both `Title` and `ai_title` are sentinels), prompt:
+
+> "`ai_title` is blank on this one — what should we call it?"
+
+Apply this validation to the user's response BEFORE writing:
+- Trim leading/trailing whitespace.
+- Reject if the trimmed result is empty, whitespace-only, longer than 200 chars, OR matches any of the `ai_title` sentinels (user typed just `"‣"`).
+- If the user's response is one of `"skip"`, `"no"`, `"forget it"`, `"nevermind"`, `"cancel"` (case-insensitive) — treat as "user aborted the skip" and go to 4d.
+- If validation fails otherwise (empty after trim, too long, sentinel) — re-prompt once with clarification. If the second response also fails, go to 4d.
+
+If validation passes on first or second attempt, `proposed_title = <validated response>`. Proceed to 4b.
+
+#### 4b. Confirm the skip
+
+Surface to the user:
+
+> "This meeting looks empty — no transcript, no summary, no notes. Proposed title: `<proposed_title>`. Mark Review Status = Skipped?"
+
+Wait for explicit user confirmation. NEVER auto-skip.
+
+If the user declines the skip itself (says "no", "not now", "let me look at it first"), exit the fast-path cleanly — the row stays in its current state. The skill may offer to continue with a normal review at the user's discretion, but there's no content to triage so this typically ends the invocation.
+
+#### 4c. Write the skip
+
+On user confirmation in 4b:
+
+- If the `preserved` flag from 4a Path A is set → one `notion-update-page` call with `update_properties` setting ONLY `Review Status: "Skipped"` (leave existing `Title` alone).
+- Otherwise → one `notion-update-page` call setting BOTH `Title: <proposed_title>` AND `Review Status: "Skipped"` in the `properties` map, following the same multi-property pattern used by `luke-meeting-commit` Step 7 (Title, Domain, Initiative, Summary, Review Status in one call).
+
+Example of the combined write:
+
+```
+mcp__claude_ai_Notion__notion-update-page({
+  page_id: "<meeting_id>",
+  command: "update_properties",
+  properties: {
+    "Title": "<proposed_title>",
+    "Review Status": "Skipped"
+  },
+  content_updates: []
+})
+```
+
+The atomic multi-property write eliminates the half-written state that produced the existing orphan `"‣"` rows.
 
 **Do NOT attempt to trash via MCP** — MCP has no `in_trash` support. If the user genuinely wants the meeting deleted, tell them to trash it from the Notion UI.
 
-NEVER auto-skip. (Historical: earlier in this project, bulk-trashing 4 rows without checking destroyed content that had to be restored.)
+#### 4d. Echo the outcome
+
+After the write (or on clean abort), report the outcome to the user. Four response shapes:
+
+Case — `ai_title` populated and used:
+```
+Skipped. Renamed to "<proposed_title>" (from ai_title).
+Status → Skipped. Edit via /luke-edit if you want a different title.
+```
+
+Case — user supplied the title:
+```
+Skipped. Renamed to "<proposed_title>".
+Status → Skipped. Edit via /luke-edit if you want a different title.
+```
+
+Case — existing Title preserved (Path A):
+```
+Skipped. Kept existing title: "<current Title>".
+Status → Skipped.
+```
+
+Case — user aborted the title prompt or declined the skip (no write happened):
+```
+No changes made. The meeting stays in its current state (Review Status: <current value>).
+Come back when you have a title, or edit the meeting in Notion directly and re-run /luke-meeting-review.
+```
+
+#### NEVER auto-skip
+
+Historical: earlier in this project, bulk-trashing 4 rows without user confirmation destroyed content that had to be restored. The confirmation gate in 4b is non-negotiable. No write happens without both (a) a valid proposed title and (b) explicit user confirmation of the skip.
 
 ### Step 5: Phase 1 — Triage
 
