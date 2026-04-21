@@ -1,7 +1,7 @@
 ---
 name: luke-tasks
-description: ALWAYS invoke this skill for viewing tasks - contains canonical DB reference and query patterns. Use for any request about tasks, todos, what's left to do, project status.
-allowed-tools: Bash, Read, mcp__claude_ai_Notion__notion-fetch, mcp__claude_ai_Notion__notion-search, mcp__claude_ai_Notion__notion-query-database-view, mcp__claude_ai_Notion__notion-update-page
+description: ALWAYS invoke this skill for viewing tasks. For targeted queries (overdue, untriaged, find-a-task, <~100 expected rows) use hosted MCP — this skill's default path. For exhaustive domain/status enumerations (ALL of X, EVERY Y, full counts) this skill delegates to /luke-dump via the bundled notion-dump MCP server.
+allowed-tools: Bash, Read, mcp__claude_ai_Notion__notion-fetch, mcp__claude_ai_Notion__notion-search, mcp__claude_ai_Notion__notion-query-database-view, mcp__claude_ai_Notion__notion-update-page, mcp__luke-notion__dump-data-source
 ---
 
 # Tasks Skill
@@ -35,20 +35,50 @@ All tasks live in a single consolidated database. Domain is derived from the Ini
 - "intake" / "untriaged" / "unassigned tasks" → fetch the default view and filter in-memory for tasks with no Initiative
 - In a domain repo (e.g., EMS-billing) → default to that domain search, but ask if user says "all"
 
+### Exhaustive queries (>100 rows likely)
+
+For queries where completeness matters — the user said "ALL", "EVERY", or a count-of-everything — delegate to the bundled MCP server via `mcp__luke-notion__dump-data-source`. This paginates past the hosted MCP's 100-row cap.
+
+**Examples:**
+- "show me ALL Cogent tasks" → `dump-data-source` with a filter matching Cogent initiatives (see Filter Patterns below).
+- "how many tasks total in Backlog" → `dump-data-source` with `count_only: true`.
+- "export all Coresynq tasks" → `dump-data-source` with `output_path: "/tmp/coresynq-tasks.json"`.
+
+**Filter patterns for common enumerations:**
+
+| Intent | Filter JSON |
+|---|---|
+| All tasks in a Status | `{"property": "Status", "select": {"equals": "Backlog"}}` |
+| All untriaged (no Initiative) | `{"property": "Initiative", "relation": {"is_empty": true}}` |
+| All tasks touched since date | `{"property": "Last edited time", "last_edited_time": {"on_or_after": "2026-04-01"}}` |
+
+Domain filtering (e.g. "all Cogent tasks") typically requires filtering on the `Initiative` relation — since MCP returns `<omitted />` for the `Domain` rollup. Use `notion-search` to resolve Cogent initiative IDs first, then build a compound filter. For rough "all of domain X" queries when an exact initiative list isn't needed, fall back to a full dump + in-memory filter on Initiative name prefix.
+
+If a dump returns `partial: true` in the response, surface that to the user — the count is incomplete.
+
 ## Execution
 
 ### List all tasks
 
-The canonical Tasks DB has ~800+ rows. Querying the full default view exceeds the MCP response size limit and will be saved to an overflow file. Prefer a domain-scoped search unless the user genuinely wants everything.
+For "show all tasks", "everything on the board", or similar domain-wide enumerations — delegate to `/luke-dump` via the bundled MCP server. This paginates past the 100-row cap.
 
-If the user really wants the full list:
 ```
-mcp__claude_ai_Notion__notion-query-database-view({
-  view_url: "https://www.notion.so/4de35153f31d4427bc5a1c3b1c08648e?v=64db81b1-253a-4738-a6fe-d7a60d58a235"
+mcp__luke-notion__dump-data-source({
+  data_source_id: "collection://b0d00fd8-eebb-434d-84c1-a652260fbe79",
+  output_path: "/tmp/all-tasks.json"
 })
 ```
 
-When the response overflows to a file path, read that file directly in chunks.
+Read the resulting JSON array with `Read` or use `Bash` + `jq` to slice. Never dump >50 raw rows into the conversation — aggregate first.
+
+For count-only requests:
+
+```
+mcp__luke-notion__dump-data-source({
+  data_source_id: "collection://b0d00fd8-eebb-434d-84c1-a652260fbe79",
+  count_only: true
+})
+```
 
 ### Domain Filtering
 
