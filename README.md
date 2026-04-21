@@ -16,6 +16,10 @@ On any Mac with Claude Code:
    /plugin install luke-notion@luke-plugins
    ```
 
+On first install (v0.2.0+), Claude Code will prompt for a `NOTION_TOKEN` — paste your integration token (starts with `ntn_`). If you skip the prompt, the MCP server falls back to reading `NOTION_TOKEN` from your shell environment.
+
+**Before the token works, grant the integration access to the canonical DBs** via each DB's ••• → Connections → Add. Without this step, `/luke-dump` returns 403 errors.
+
 If your Mac already has local copies of the `luke-*` skills in `~/.claude/skills/`, delete those after install so the plugin version is canonical:
 
 ```bash

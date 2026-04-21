@@ -1,12 +1,13 @@
 # luke-notion
 
-Task and meeting workflow skills for Collin's canonical Notion workspace. Pure MCP — no scripts, no bundled tokens.
+Task and meeting workflow skills for Collin's canonical Notion workspace.
 
 ## Prerequisites
 
-- Claude Code installed
-- Notion MCP connector authenticated in Claude Code settings (Settings → MCP → claude.ai Notion)
-- Access to the canonical Notion workspace (cortex Tasks DB `4de35153`, Meetings DB `9d019a9f`, Initiatives DB `0b32261c`)
+- **Claude Code installed + Notion MCP connector authenticated** — for all existing skills (luke-add, luke-edit, etc). Configure via Settings → MCP → claude.ai Notion.
+- **Access to the canonical Notion workspace** — cortex Tasks DB `4de35153`, Meetings DB `9d019a9f`, Initiatives DB `0b32261c-5766-4cbe-bb64-83d8e62f9cfe`.
+- **Node 18+ on PATH** — new in v0.2.0, required by the bundled MCP server that powers `/luke-dump`. Verify: `node --version`.
+- **NOTION_TOKEN** — new in v0.2.0. Create an internal integration at https://www.notion.so/my-integrations. Grant it access to the canonical DBs (Tasks `4de35153`, Meetings `9d019a9f`, Initiatives `0b32261c-5766-4cbe-bb64-83d8e62f9cfe`) via each DB's ••• → Connections → Add. The token is then either supplied via the plugin install prompt (stored in macOS Keychain) or exported as `NOTION_TOKEN=ntn_...` in your shell.
 
 ## Skills
 
@@ -16,6 +17,7 @@ Task and meeting workflow skills for Collin's canonical Notion workspace. Pure M
 | `/luke-tasks` | List / search tasks, with domain-aware filtering |
 | `/luke-edit` | Update properties on an existing task |
 | `/luke-done` | Mark a task Done |
+| `/luke-dump` | Exhaustively enumerate a Notion data source beyond the hosted MCP's 100-row cap. Requires NOTION_TOKEN + integration access. |
 | `/luke-domain` | Create or audit Initiatives; add a new Domain (guided) |
 | `/luke-meeting-review` | Review a Notion meeting page; produce a local markdown draft |
 | `/luke-meeting-commit` | Push a ready-to-commit review draft to Notion (creates tasks + updates meeting properties) |
