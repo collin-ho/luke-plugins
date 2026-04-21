@@ -147,3 +147,154 @@ async function fetchWithRetry({ url, body, token, fetchImpl, retryDelayMs }) {
 async function safeText(resp) {
   try { return await resp.text(); } catch { return '(no body)'; }
 }
+
+import { writeFileSync } from 'node:fs';
+
+// -------- MCP protocol subset --------
+// Reference: https://modelcontextprotocol.io/specification
+
+const SERVER_INFO = { name: 'luke-notion-dump', version: '0.2.0' };
+const PROTOCOL_VERSION = '2024-11-05';
+
+const TOOL_SCHEMA = {
+  name: 'dump-data-source',
+  description: 'Exhaustively paginate a Notion data source via the REST API. Returns all matching rows, beyond the hosted MCP\'s 100-row cap. Supports filter passthrough, count-only mode, and output-to-file for large dumps.',
+  inputSchema: {
+    type: 'object',
+    required: ['data_source_id'],
+    properties: {
+      data_source_id: {
+        type: 'string',
+        description: 'Data source UUID (e.g., "b0d00fd8-eebb-434d-84c1-a652260fbe79") or collection:// URI. Multi-source database IDs are not supported in v0.2.0.',
+      },
+      filter: {
+        type: 'object',
+        description: 'Notion filter JSON (shape per /v1/data_sources/{id}/query — may differ slightly from legacy /v1/databases/{id}/query).',
+      },
+      count_only: {
+        type: 'boolean',
+        description: 'If true, paginate fully but return only the total count. Recommended when caller only needs a number and a 900-row payload would overflow context.',
+      },
+      output_path: {
+        type: 'string',
+        description: 'If set, write the flattened JSON array to this absolute path and return {count, path}. Recommended for dumps of >200 rows to keep the tool response small.',
+      },
+    },
+  },
+};
+
+async function handleToolCall(args) {
+  const token = process.env.NOTION_TOKEN;
+  if (!token) {
+    return {
+      content: [{
+        type: 'text',
+        text: 'NOTION_TOKEN is not set. Either run `/plugin install luke-notion@luke-plugins` to re-prompt (the plugin stores the token in macOS Keychain via userConfig), or export NOTION_TOKEN=ntn_... in your shell env as a fallback.',
+      }],
+      isError: true,
+    };
+  }
+
+  let dataSourceId;
+  try {
+    dataSourceId = normalizeDataSourceId(args.data_source_id);
+  } catch (e) {
+    return { content: [{ type: 'text', text: e.message }], isError: true };
+  }
+
+  let rows, partial;
+  try {
+    const result = await paginateDataSource({
+      dataSourceId,
+      filter: args.filter ?? null,
+      token,
+    });
+    rows = result.rows;
+    partial = result.partial;
+  } catch (e) {
+    return { content: [{ type: 'text', text: e.message }], isError: true };
+  }
+
+  const flat = rows.map(p => ({
+    id: p.id,
+    url: p.url,
+    created_time: p.created_time,
+    last_edited_time: p.last_edited_time,
+    ...Object.fromEntries(
+      Object.entries(p.properties ?? {}).map(([k, v]) => [k, flattenProp(v)])
+    ),
+  }));
+  const count = flat.length;
+
+  // Response shape by caller flags
+  if (args.count_only) {
+    return { content: [{ type: 'text', text: JSON.stringify({ count, partial: partial || undefined }) }] };
+  }
+  if (args.output_path) {
+    writeFileSync(args.output_path, JSON.stringify(flat, null, 2));
+    return { content: [{ type: 'text', text: JSON.stringify({ count, path: args.output_path, partial: partial || undefined }) }] };
+  }
+  return { content: [{ type: 'text', text: JSON.stringify({ count, rows: flat, partial: partial || undefined }) }] };
+}
+
+function respond(id, result) {
+  process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id, result }) + '\n');
+}
+function respondError(id, code, message) {
+  process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id, error: { code, message } }) + '\n');
+}
+
+async function handleMessage(msg) {
+  if (msg.method === 'initialize') {
+    return respond(msg.id, {
+      protocolVersion: PROTOCOL_VERSION,
+      capabilities: { tools: {} },
+      serverInfo: SERVER_INFO,
+    });
+  }
+  if (msg.method === 'notifications/initialized') {
+    // No response for notifications
+    return;
+  }
+  if (msg.method === 'tools/list') {
+    return respond(msg.id, { tools: [TOOL_SCHEMA] });
+  }
+  if (msg.method === 'tools/call') {
+    if (msg.params?.name !== 'dump-data-source') {
+      return respondError(msg.id, -32601, `Unknown tool: ${msg.params?.name}`);
+    }
+    const result = await handleToolCall(msg.params.arguments ?? {});
+    return respond(msg.id, result);
+  }
+  if (msg.method === 'ping') {
+    return respond(msg.id, {});
+  }
+  // Unknown method
+  respondError(msg.id, -32601, `Method not found: ${msg.method}`);
+}
+
+async function main() {
+  let buffer = '';
+  process.stdin.setEncoding('utf8');
+  process.stdin.on('data', async chunk => {
+    buffer += chunk;
+    let idx;
+    while ((idx = buffer.indexOf('\n')) >= 0) {
+      const line = buffer.slice(0, idx).trim();
+      buffer = buffer.slice(idx + 1);
+      if (!line) continue;
+      try {
+        const msg = JSON.parse(line);
+        await handleMessage(msg);
+      } catch (e) {
+        process.stderr.write(`Error handling message: ${e.message}\n`);
+      }
+    }
+  });
+  process.stdin.on('end', () => process.exit(0));
+}
+
+// Only run main() when invoked directly (not imported for tests)
+if (import.meta.url === `file://${process.argv[1]}`) {
+  main();
+}
