@@ -73,6 +73,39 @@ test('flattenProp: rollup → inner value of rollup.type', () => {
   assert.equal(flattenProp(v), 10);
 });
 
+test('flattenProp: rollup type=array → recursively flattened array', () => {
+  const v = {
+    type: 'rollup',
+    rollup: {
+      type: 'array',
+      array: [
+        { type: 'select', select: { id: 'x', name: 'Coresynq', color: 'blue' } },
+        { type: 'select', select: { id: 'y', name: 'Rezzy', color: 'green' } }
+      ]
+    }
+  };
+  assert.deepEqual(flattenProp(v), ['Coresynq', 'Rezzy']);
+});
+
+test('flattenProp: rollup type=array with null items → nulls preserved', () => {
+  const v = {
+    type: 'rollup',
+    rollup: {
+      type: 'array',
+      array: [
+        { type: 'select', select: null },
+        { type: 'select', select: { name: 'Cogent' } }
+      ]
+    }
+  };
+  assert.deepEqual(flattenProp(v), [null, 'Cogent']);
+});
+
+test('flattenProp: rollup type=array empty → empty array', () => {
+  const v = { type: 'rollup', rollup: { type: 'array', array: [] } };
+  assert.deepEqual(flattenProp(v), []);
+});
+
 test('flattenProp: status → name or null', () => {
   assert.equal(flattenProp({ type: 'status', status: { name: 'Done' } }), 'Done');
   assert.equal(flattenProp({ type: 'status', status: null }), null);

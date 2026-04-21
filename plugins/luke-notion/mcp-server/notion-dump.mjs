@@ -19,7 +19,10 @@ export function flattenProp(v) {
                                   ? `${v.unique_id.prefix ?? ''}${v.unique_id.number}`
                                   : null;
     case 'formula':           return v.formula?.[v.formula.type] ?? null;
-    case 'rollup':            return v.rollup?.[v.rollup.type] ?? null;
+    case 'rollup':
+      if (!v.rollup) return null;
+      if (v.rollup.type === 'array') return v.rollup.array.map(item => flattenProp(item));
+      return v.rollup[v.rollup.type] ?? null;
     case 'status':            return v.status?.name ?? null;
     default:                  return v;
   }
