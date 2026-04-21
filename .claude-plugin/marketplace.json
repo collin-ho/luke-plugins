@@ -1,0 +1,15 @@
+{
+  "name": "luke-plugins",
+  "owner": {
+    "name": "Collin Hoben",
+    "email": "choben@rezzy.us"
+  },
+  "plugins": [
+    {
+      "name": "luke-notion",
+      "source": "./plugins/luke-notion",
+      "description": "Notion-native task, meeting, and taxonomy skills against Collin's canonical cortex workspace.",
+      "version": "0.1.0"
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "name": "luke-notion",
+  "version": "0.1.0",
+  "description": "Task and meeting workflow skills for Collin's canonical Notion workspace. Pure MCP — requires the Notion MCP connector to be authenticated in Claude Code.",
+  "author": {
+    "name": "Collin Hoben"
+  },
+  "homepage": "https://github.com/collin-ho/luke-plugins",
+  "repository": "https://github.com/collin-ho/luke-plugins",
+  "keywords": ["notion", "tasks", "meetings", "productivity"]
+}
