@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "luke-notion": {
+      "command": "node",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/mcp-server/notion-dump.mjs"],
+      "env": {
+        "NOTION_TOKEN": "${user_config.NOTION_TOKEN}"
+      }
+    }
+  }
+}
