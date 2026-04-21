@@ -14,6 +14,20 @@ Treat the user as the curator. AI task extraction is low-value (0/10 on ground t
 
 Never silently filter user-candidate tasks. Show them, let the user decide.
 
+## Review Status Lifecycle
+
+Every row in the Meetings DB is in exactly one of three canonical states:
+
+| State | Meaning | Set by |
+|---|---|---|
+| `Review Status = null` (blank) | Default state for a newly-ingested meeting. Has not been reviewed. | Notion ingest. |
+| `Review Status = "Reviewed"` | Full review completed, tasks committed. Title and other properties populated. | `luke-meeting-commit` (Step 7). |
+| `Review Status = "Skipped"` | User confirmed not worth reviewing. Title was renamed to a human-readable value *in the same write* as the status change. | `luke-meeting-review` Step 4 fast-path. |
+
+`Pending` and `Unreviewed` remain in the schema as vestigial enum options. **This skill never writes them.** Step 0 candidate queries still surface them until the legacy population naturally drains (see Step 0 — structured-filter branch).
+
+The title-rename on `Skipped` is mandatory: no row may land with `Title = "‣"` or blank. See Step 4 below for the two-path title-source rule.
+
 ## Core Philosophy
 
 ```
