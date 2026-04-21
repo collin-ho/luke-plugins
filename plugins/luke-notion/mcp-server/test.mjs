@@ -126,3 +126,112 @@ test('normalizeDataSourceId: rejects garbage', () => {
   assert.throws(() => normalizeDataSourceId('not-a-uuid'), /invalid|data source|collection/i);
   assert.throws(() => normalizeDataSourceId(''), /required|empty|invalid/i);
 });
+
+import { paginateDataSource } from './notion-dump.mjs';
+
+function mockFetch(responses) {
+  let i = 0;
+  return async (url, opts) => {
+    const body = JSON.parse(opts.body);
+    const resp = responses[i++];
+    if (typeof resp === 'function') return resp(body);
+    return {
+      ok: resp.ok ?? true,
+      status: resp.status ?? 200,
+      async json() { return resp.json; },
+      async text() { return JSON.stringify(resp.json); },
+    };
+  };
+}
+
+test('paginateDataSource: single page', async () => {
+  const fetch = mockFetch([
+    { json: { results: [{ id: 'a' }, { id: 'b' }], has_more: false, next_cursor: null } },
+  ]);
+  const result = await paginateDataSource({
+    dataSourceId: 'b0d00fd8-eebb-434d-84c1-a652260fbe79',
+    filter: null,
+    token: 'ntn_fake',
+    fetchImpl: fetch,
+  });
+  assert.equal(result.rows.length, 2);
+  assert.equal(result.partial, false);
+});
+
+test('paginateDataSource: three pages with cursor progression', async () => {
+  const fetch = mockFetch([
+    { json: { results: Array(100).fill(0).map((_,i) => ({id:`p1-${i}`})), has_more: true, next_cursor: 'c1' } },
+    { json: { results: Array(100).fill(0).map((_,i) => ({id:`p2-${i}`})), has_more: true, next_cursor: 'c2' } },
+    { json: { results: Array(50).fill(0).map((_,i) => ({id:`p3-${i}`})), has_more: false, next_cursor: null } },
+  ]);
+  const result = await paginateDataSource({
+    dataSourceId: 'b0d00fd8-eebb-434d-84c1-a652260fbe79',
+    filter: null,
+    token: 'ntn_fake',
+    fetchImpl: fetch,
+  });
+  assert.equal(result.rows.length, 250);
+  assert.equal(result.partial, false);
+});
+
+test('paginateDataSource: filter is passed through verbatim', async () => {
+  const filter = { property: 'Status', select: { equals: 'Backlog' } };
+  let capturedBody = null;
+  const fetch = mockFetch([
+    (body) => { capturedBody = body; return { ok: true, status: 200, async json() { return { results: [], has_more: false, next_cursor: null }; } }; },
+  ]);
+  await paginateDataSource({
+    dataSourceId: 'b0d00fd8-eebb-434d-84c1-a652260fbe79',
+    filter,
+    token: 'ntn_fake',
+    fetchImpl: fetch,
+  });
+  assert.deepEqual(capturedBody.filter, filter);
+});
+
+test('paginateDataSource: 401 returns clear error', async () => {
+  const fetch = mockFetch([{ ok: false, status: 401, json: { message: 'Unauthorized' } }]);
+  await assert.rejects(
+    () => paginateDataSource({
+      dataSourceId: 'b0d00fd8-eebb-434d-84c1-a652260fbe79',
+      filter: null,
+      token: 'ntn_bad',
+      fetchImpl: fetch,
+    }),
+    /integration|access|401|unauthorized/i
+  );
+});
+
+test('paginateDataSource: 403 returns clear error', async () => {
+  const fetch = mockFetch([{ ok: false, status: 403, json: { message: 'Forbidden' } }]);
+  await assert.rejects(
+    () => paginateDataSource({
+      dataSourceId: 'b0d00fd8-eebb-434d-84c1-a652260fbe79',
+      filter: null,
+      token: 'ntn_bad',
+      fetchImpl: fetch,
+    }),
+    /integration|access|403|connections/i
+  );
+});
+
+test('paginateDataSource: 429 retries once, then returns partial', async () => {
+  let call = 0;
+  const fetch = async () => {
+    call++;
+    if (call === 1) {
+      return { ok: true, status: 200, async json() { return { results: [{id:'a'}], has_more: true, next_cursor: 'c1' }; } };
+    }
+    // Page 2 + retry both 429
+    return { ok: false, status: 429, async json() { return {}; }, async text() { return 'rate limited'; } };
+  };
+  const result = await paginateDataSource({
+    dataSourceId: 'b0d00fd8-eebb-434d-84c1-a652260fbe79',
+    filter: null,
+    token: 'ntn_fake',
+    fetchImpl: fetch,
+    retryDelayMs: 0,  // don't wait in tests
+  });
+  assert.equal(result.rows.length, 1);
+  assert.equal(result.partial, true);
+});
