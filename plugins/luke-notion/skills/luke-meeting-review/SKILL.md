@@ -1,7 +1,7 @@
 ---
 name: luke-meeting-review
 description: Review a Notion meeting page and produce a curated review draft. ALWAYS use this skill when the user wants to process a meeting, extract tasks from a meeting, or "review" a meeting. Never skip Phase 1 triage. Never silently filter user-candidate tasks.
-allowed-tools: Bash, Read, Write, Edit, mcp__claude_ai_Notion__notion-fetch, mcp__claude_ai_Notion__notion-search, mcp__claude_ai_Notion__notion-query-database-view, mcp__claude_ai_Notion__notion-create-pages, mcp__claude_ai_Notion__notion-update-data-source, mcp__claude_ai_Notion__notion-update-page, mcp__claude_ai_Notion__notion-get-users
+allowed-tools: Bash, Read, Write, Edit, mcp__claude_ai_Notion__notion-fetch, mcp__claude_ai_Notion__notion-search, mcp__claude_ai_Notion__notion-create-pages, mcp__claude_ai_Notion__notion-update-data-source, mcp__claude_ai_Notion__notion-update-page, mcp__claude_ai_Notion__notion-get-users, mcp__plugin_luke-notion_luke-notion__dump-data-source
 ---
 
 # Meeting Review Skill
@@ -43,39 +43,53 @@ Commitments (verbatim quotes from transcript) > speculative AI tasks.
 The user may invoke this skill with:
 - A Notion page ID (dashed UUID or 32-char hex)
 - A Notion meeting URL
-- A natural-language phrase (`"Karen 1:1 yesterday"`, `"latest Coresynq billing"`, `"today's Tim 1:1"`)
-- Nothing at all
-- A structured filter (e.g. "pending meetings", "Cogent domain meetings")
+- A named hint (`"Karen 1:1 yesterday"`, `"team vs enterprise"`, `"latest Coresynq billing"`)
+- Nothing at all (default: present all unreviewed)
+- A structured hint (e.g. "recent meetings", "to-review", "Coresynq meetings")
 
-**Resolution strategy (MCP-first):**
+**Resolution strategy:**
 
 - **Meetings DB ID:** `9d019a9f-235f-4ecc-af82-8695a99859da`
 - **Meetings data source:** `collection://db2e5ca6-92b7-4e39-ab23-f4c496d2636c`
 
 **If UUID or URL** → normalize to a 32-char hex or dashed UUID inline (strip `https://www.notion.so/...` prefix, extract the ID from the path). Proceed directly to Step 1 with the resolved ID.
 
-**If natural language** → use `mcp__claude_ai_Notion__notion-search` scoped to the Meetings data source (`collection://db2e5ca6-92b7-4e39-ab23-f4c496d2636c`) with the user's phrase as the query. Parse the returned candidates.
+**Otherwise**, always start with the null-status dump:
 
-**If structured filter, or nothing at all** (e.g. "recent meetings", "to-review", "needs review", no args) — present recent unreviewed meetings.
+```
+mcp__plugin_luke-notion_luke-notion__dump-data-source({
+  data_source_id: "db2e5ca6-92b7-4e39-ab23-f4c496d2636c",
+  filter: {"property": "Review Status", "select": {"is_empty": true}}
+})
+```
 
-The canonical unreviewed state is `Review Status IS null`. Retrieve candidates with two parallel calls:
+Returns all null-status rows with their full page properties (Title, Date, Domain, created_time, etc.). This IS the candidate list — no second call needed for the default "review my meetings" case. The bundled dump server is required here because `mcp__claude_ai_Notion__notion-query-database-view` takes a `view_url` and executes a view's pre-configured filters; it does not accept ad-hoc filter arguments.
 
-1. `mcp__claude_ai_Notion__notion-query-database-view` on the Meetings DB (`9d019a9f-235f-4ecc-af82-8695a99859da`) filtered by `Review Status IS null` — gives all unreviewed page IDs with their page properties.
-2. `mcp__claude_ai_Notion__notion-search` scoped to the Meetings data source (`collection://db2e5ca6-92b7-4e39-ab23-f4c496d2636c`) with the user's hint as the query (or empty query if no hint), `page_size: 25`, `max_highlight_length: 200` — gives recent pages with block-content highlight snippets.
+**If the user provided a named hint** (e.g. "William 1:1", "Karen yesterday", "team vs enterprise"):
 
-Join: for each page ID returned by the null-status query, attach the matching `highlight` snippet from the search response. If a candidate has no matching search result (its block has no indexable content yet), mark it `(no content yet)` and use its page creation timestamp as the only identifier.
+1. Fuzzy-match the hint against the `Title` values in the dump result. If one row unambiguously matches, auto-pick and announce.
+2. If zero Title matches (hint refers to block content, page has a timestamp title only), fall back to `notion-search`:
+   ```
+   mcp__claude_ai_Notion__notion-search({
+     query: "<hint>",
+     query_type: "internal",
+     data_source_url: "collection://db2e5ca6-92b7-4e39-ab23-f4c496d2636c",
+     page_size: 10,
+     max_highlight_length: 200,
+     filters: {}
+   })
+   ```
+   `notion-search` in ai_search mode indexes block content. Use its `highlight` field to confirm a content match before auto-picking. Only cross-reference matches back against the null-status dump result — a hit on a `Reviewed` or `Skipped` row is not a candidate.
+3. If multiple candidates survive (Title match ambiguous, or search returned several null-status hits), present the matching shortlist with any highlights and ask the user to pick.
 
-Queries for already-reviewed or already-skipped meetings continue to use exact values (`Review Status = "Reviewed"` or `= "Skipped"`) — no OR required.
+**Candidate presentation** (no hint, or hint with multiple matches): sort by date descending (newest first, using `date:Date:start` when set, else `created_time`). For each row, display:
 
-**Candidate presentation:** when multiple candidates are returned, present them to the user:
+- If `Title` is a meaningful string (not `"‣"`, empty, or a bare ISO timestamp like `"2026-04-21T17:15:00.000-04:00"`), show: `<Title>` · `<Date>` · `<page_id_short>`.
+- Otherwise show `(no content yet — created <created_time>)` · `<page_id_short>`. Timestamp-titled rows may still contain block content worth reviewing; don't drop them silently.
 
-- Display each candidate as `<highlight_snippet_first_~60_chars>...` · `<created_at>` · `<page_id>`, where `highlight_snippet` is the `highlight` field from the scoped `notion-search` call (block content, typically from the meeting's `<summary>`).
-- If `notion-search` returned no highlight for a row, show `(no content yet — created <creation timestamp>)` instead.
-- If the user's query obviously narrows to exactly one candidate, auto-pick and announce.
-- Otherwise show a numbered shortlist, ask user to pick (by number, by keyword, or by pasting an ID).
-- User may also refine the query → re-run the resolution.
+Present as a numbered list. Ask the user to pick by number, ID, or refined hint.
 
-Rationale: every `Review Status = null` row has `Title = "‣"` and empty page properties. Block-content highlights from `notion-search` are the only way to differentiate them at a glance. This is load-bearing, not cosmetic.
+**Additional structured filters:** for "Reviewed meetings" / "Skipped meetings" / "Coresynq meetings" / etc., extend the dump filter accordingly — e.g. `{"property": "Review Status", "select": {"equals": "Reviewed"}}` or compound with `{"and": [{"property": "Review Status", "select": {"is_empty": true}}, {"property": "Domain", "select": {"equals": "Coresynq"}}]}`.
 
 Once a meeting ID is confirmed, proceed to Step 1.
 
@@ -88,9 +102,24 @@ Before reviewing the meeting, check for untriaged tasks in the canonical Tasks D
 
 All tasks live in this single DB. "Triage" means assigning an Initiative to tasks that don't have one yet.
 
-Query via `mcp__claude_ai_Notion__notion-query-database-view` for items where:
-- **Initiative** relation is empty (no linked initiative)
-- **Status** is `Backlog` or `To Do`
+Query via the bundled dump server:
+
+```
+mcp__plugin_luke-notion_luke-notion__dump-data-source({
+  data_source_id: "b0d00fd8-eebb-434d-84c1-a652260fbe79",
+  filter: {
+    "and": [
+      {"property": "Initiative", "relation": {"is_empty": true}},
+      {"or": [
+        {"property": "Status", "status": {"equals": "Backlog"}},
+        {"property": "Status", "status": {"equals": "To Do"}}
+      ]}
+    ]
+  }
+})
+```
+
+(If the Tasks DS uses `select` instead of `status` for the Status property, swap `"status":` for `"select":` in the filter clauses.)
 
 When the query returns results, present them immediately as a numbered list. Do NOT ask whether to triage first — present, then ask which initiative each goes to.
 
