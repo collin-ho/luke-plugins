@@ -329,6 +329,20 @@ Then the **open-prompt escape hatch:**
 
 > "These are all [initiative] work. Separate tasks linked to the same initiative, or one umbrella task with details in notes?"
 
+**Initiative-conditional field prompts:** for each task the user commits to keeping, apply these conditional prompts before writing it to the draft:
+
+- If the task's initiative name starts with `Coresynq – `: offer an Area value. First attempt auto-inference using the Coresynq keyword table documented in `/luke-add`'s "Domain-Specific Properties" section (e.g., `claim form` → Billing). If inference hits one or two Areas confidently, show them for user confirmation: *"Area: [Billing]? (y/edit/skip)"*. If inference is ambiguous or zero-hit, ask: *"Area? (pick from list, or skip)"* and offer the full Area list.
+- If the task's initiative name starts with `Rezzy – ` OR `Rezzy External – `: ask: *"Client? (school name or skip)"*. No auto-inference — clients are usually named explicitly in the meeting if relevant.
+- Otherwise (Cogent, Personal, Work, or any other domain): no field prompt.
+
+**Source Spec capture:** during task extraction, if a transcript segment tied to a candidate task references a file path matching `/Users/.*\.md` or `docs/.*\.md` (or a similar spec-like path), surface inline:
+
+> "Transcript references `<path>` — attach as `source_spec`? (y/n)"
+
+Do NOT auto-attach. User confirmation is mandatory. If no spec path is cited in the transcript, the field stays absent.
+
+All three prompts are optional — user always has a `skip` escape. Absent fields must stay absent in the draft (do not write empty strings or placeholder values).
+
 ### Step 9: Write the draft markdown
 
 Once all content is curated, assemble the full draft markdown inline and use the `Write` tool to save it to `~/.claude/luke/drafts/meeting-reviews/<meeting_id>.md`. This is a user-global location — always the same path regardless of the Claude Code session's current working directory. If the directory doesn't yet exist, run `mkdir -p ~/.claude/luke/drafts/meeting-reviews` first (Bash tool).
@@ -381,6 +395,10 @@ Body structure:
 - priority: P1
 - status: To Do
 - due: 2026-04-25
+- assignee: 1b1d872b-594c-81d5-8ae2-00027cffc129
+- area: [Billing, Claims]
+- client: Duke
+- source_spec: /Users/collin-mbp-m5/workspace/docs/specs/2026-04-22-xyz.md
 - source: review-conversation
 - notes: |
     Multi-line notes here.
@@ -388,9 +406,13 @@ Body structure:
 
 Rules:
 - Plain `- key: value` only. No bold markdown (not `- **key:** value`).
-- Assignee field is optional.
+- `initiative`, `priority`, `status`, `notes` are required. All others are optional — omit the line entirely if no value (do NOT write empty strings).
+- `area` is a bracketed list (1–2 values). Valid only for Coresynq-domain tasks.
+- `client` is a single value (school name). Valid only for Rezzy-domain tasks.
+- `source_spec` is a file path. Set when the task derives from a spec doc referenced in the transcript.
 - Valid statuses: `Backlog`, `To Do`, `In Progress`, `Pending Review`, `Blocked`, `Done`, `Archived`.
 - Valid priorities: `P0`, `P1`, `P2`, `P3`.
+- `source` is draft-internal provenance (`transcript-quote` / `review-conversation` / `ai-cross-ref`) — not a Notion property.
 
 Leave `ready_for_commit: false`. User flips to `true` when they're ready to hand off to `luke-meeting-commit`.
 
