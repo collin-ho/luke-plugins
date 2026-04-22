@@ -22,11 +22,9 @@ Every row in the Meetings DB is in exactly one of three canonical states:
 |---|---|---|
 | `Review Status = null` (blank) | Default state for a newly-ingested meeting. Has not been reviewed. | Notion ingest. |
 | `Review Status = "Reviewed"` | Full review completed, tasks committed. Title and other properties populated. | `luke-meeting-commit` (Step 7). |
-| `Review Status = "Skipped"` | User confirmed not worth reviewing. Title was renamed to a human-readable value *in the same write* as the status change. | `luke-meeting-review` Step 4 fast-path. |
+| `Review Status = "Skipped"` | User confirmed not worth reviewing. Title was renamed to a human-readable value *in the same write* as the status change. | `luke-meeting-review` Step 4 inline skip prompt. |
 
-`Pending` and `Unreviewed` remain in the schema as vestigial enum options. **This skill never writes them.** Step 0 candidate queries still surface them until the legacy population naturally drains (see Step 0 — structured-filter branch).
-
-The title-rename on `Skipped` is mandatory: no row may land with `Title = "‣"` or blank. See Step 4 below for the two-path title-source rule.
+The title-rename on `Skipped` is mandatory: no row may land with `Title = "‣"` or blank. See Step 4 below for the title-source rule.
 
 ## Core Philosophy
 
@@ -58,28 +56,26 @@ The user may invoke this skill with:
 
 **If natural language** → use `mcp__claude_ai_Notion__notion-search` scoped to the Meetings data source (`collection://db2e5ca6-92b7-4e39-ab23-f4c496d2636c`) with the user's phrase as the query. Parse the returned candidates.
 
-**If structured filter** (e.g. "pending meetings", "unreviewed", "to-review", "needs review", or nothing at all with an implicit recency-based filter) — the skill must treat the three legacy "needs review" states as equivalent:
+**If structured filter, or nothing at all** (e.g. "recent meetings", "to-review", "needs review", no args) — present recent unreviewed meetings.
 
-```
-Review Status IS null OR Review Status = "Unreviewed" OR Review Status = "Pending"
-```
+The canonical unreviewed state is `Review Status IS null`. Retrieve candidates with two parallel calls:
 
-All three mean "has not been reviewed yet." `null` is the default state for newly-ingested meetings going forward. `Unreviewed` and `Pending` are legacy values left in the DB from earlier migrations — the skill no longer writes either (Rule 1 below) but must still surface them until they naturally drain.
+1. `mcp__claude_ai_Notion__notion-query-database-view` on the Meetings DB (`9d019a9f-235f-4ecc-af82-8695a99859da`) filtered by `Review Status IS null` — gives all unreviewed page IDs with their page properties.
+2. `mcp__claude_ai_Notion__notion-search` scoped to the Meetings data source (`collection://db2e5ca6-92b7-4e39-ab23-f4c496d2636c`) with the user's hint as the query (or empty query if no hint), `page_size: 25`, `max_highlight_length: 200` — gives recent pages with block-content highlight snippets.
 
-**Primary path:** attempt the filter directly in `mcp__claude_ai_Notion__notion-query-database-view` on the Meetings DB (`9d019a9f-235f-4ecc-af82-8695a99859da`). If the DSL supports the multi-value OR, use it.
-
-**Fallback path (if the DSL silently drops complex filters — see `feedback_mcp_view_filter_limits.md`):** (a) query for `Review Status IS null` via `notion-query-database-view`; (b) query `notion-search` scoped to the Meetings data source (`collection://db2e5ca6-92b7-4e39-ab23-f4c496d2636c`) with a broad recency filter; (c) filter the union in-memory for `Review Status IN ("Unreviewed", "Pending", null)`; (d) de-duplicate by page ID.
+Join: for each page ID returned by the null-status query, attach the matching `highlight` snippet from the search response. If a candidate has no matching search result (its block has no indexable content yet), mark it `(no content yet)` and use its page creation timestamp as the only identifier.
 
 Queries for already-reviewed or already-skipped meetings continue to use exact values (`Review Status = "Reviewed"` or `= "Skipped"`) — no OR required.
 
-**If nothing** → query recent meetings via `mcp__claude_ai_Notion__notion-search` scoped to the Meetings data source with an empty or broad query (limit to recent results).
-
 **Candidate presentation:** when multiple candidates are returned, present them to the user:
 
-- Display each with `ai_title ?? title ?? "(untitled)"` · `date` · `domain`
-- If the user's query obviously narrows to exactly one candidate, auto-pick and announce
-- Otherwise show a numbered shortlist, ask user to pick (by number, by keyword, or by pasting an ID)
-- User may also refine the query → re-run the resolution
+- Display each candidate as `<highlight_snippet_first_~60_chars>...` · `<created_at>` · `<page_id>`, where `highlight_snippet` is the `highlight` field from the scoped `notion-search` call (block content, typically from the meeting's `<summary>`).
+- If `notion-search` returned no highlight for a row, show `(no content yet — created <creation timestamp>)` instead.
+- If the user's query obviously narrows to exactly one candidate, auto-pick and announce.
+- Otherwise show a numbered shortlist, ask user to pick (by number, by keyword, or by pasting an ID).
+- User may also refine the query → re-run the resolution.
+
+Rationale: every `Review Status = null` row has `Title = "‣"` and empty page properties. Block-content highlights from `notion-search` are the only way to differentiate them at a glance. This is load-bearing, not cosmetic.
 
 Once a meeting ID is confirmed, proceed to Step 1.
 
@@ -96,7 +92,7 @@ Query via `mcp__claude_ai_Notion__notion-query-database-view` for items where:
 - **Initiative** relation is empty (no linked initiative)
 - **Status** is `Backlog` or `To Do`
 
-If results are returned, present them to the user as a numbered list:
+When the query returns results, present them immediately as a numbered list. Do NOT ask whether to triage first — present, then ask which initiative each goes to.
 
 > "Found N untriaged tasks (no Initiative assigned) before we start the review:"
 >
@@ -154,112 +150,61 @@ Preserve the raw summary verbatim for the audit section at the bottom of the dra
 
 **Overflow handling:** if the MCP response exceeds its token limit, the tool saves the full output to a file path printed in the error message. Read that file directly in sequential chunks until you've covered the entire content. When you persist it for later use, save to `~/.claude/luke/recovery/source-<meeting_id>.txt` (`mkdir -p` the directory if needed).
 
-### Step 4: Empty meeting fast-path (MCP-grounded only)
+### Step 4: Empty-meeting inline prompt (block-content signal only)
 
-After Step 3 has produced a content result, check these conditions:
+After Step 3's fetch, evaluate emptiness from the fetched block content ONLY. No page-property cross-reference, no pre-Step-3 detection.
 
-1. **Shape A empty:** the `<meeting-notes>` block is present but contains no `<summary>` content AND no `<transcript>` content (or shows an explicit `<empty-block/>` marker with no substantive siblings).
-2. **Shape B empty:** no `AI Summary (recovered)` heading AND no `Transcript (recovered)` heading present.
-3. **Neither shape detectable:** the MCP-fetched page has no meeting-notes block at all AND no recovery marker headings AND the visible body content is empty.
+**Empty conditions:**
+- **Shape A (native `<meeting-notes>`):** the block is present but contains no `<summary>` content AND no `<transcript>` content (or shows `<empty-block/>` with no substantive siblings).
+- **Shape B (recovered):** no `AI Summary (recovered)` heading AND no `Transcript (recovered)` heading.
+- **No shape detectable:** no `<meeting-notes>` block, no recovery marker headings, visible body content empty.
 
-The signal MUST come from MCP content. Do NOT cross-reference SDK block counts or diagnostics — they are not part of the emptiness decision.
+**Hard block:** if page properties include a non-null `recovered_from_url`, do NOT offer skip — surface the source URL to the user and let them decide.
 
-**Hard block:** if the page properties include a non-null `recovered_from_url`, do NOT propose skipping — surface the source URL to the user and let them decide.
+**If empty (and not recovered):** prompt inline:
 
-Only when conditions hold AND the row is not a recovered one, proceed with the fast-path flow below.
-
-#### 4a. Determine the proposed title (mandatory before any write)
-
-Before setting `Skipped`, the skill MUST end up with a human-readable Title on the row. Read both `Title` and `ai_title` properties from the page-properties payload already fetched in **Step 1** (`notion-fetch` on the meeting ID — Step 1 explicitly says: *"This provides the full page properties and content needed for triage."*). No extra MCP call is needed here.
-
-**Treat these values as sentinels (not usable as Title):**
-- `null`
-- empty string (`""`)
-- whitespace-only (`"   "`, `"\t"`, etc.)
-- the Notion placeholder glyph (`"‣"`)
-
-**Path A — existing Title is already real:** if the row's current `Title` property is NOT a sentinel, preserve it. Skip path B/C entirely. Proceed to 4b with `proposed_title = <current Title>` and an internal `preserved` flag set.
-
-**Path B — use `ai_title`:** else if `ai_title` is NOT a sentinel, set `proposed_title = ai_title`. Proceed to 4b.
-
-**Path C — ask the user:** else (both `Title` and `ai_title` are sentinels), prompt:
-
-> "`ai_title` is blank on this one — what should we call it?"
-
-Apply this validation to the user's response BEFORE writing:
-- Trim leading/trailing whitespace.
-- Reject if the trimmed result is empty, whitespace-only, longer than 200 chars, OR matches any of the `ai_title` sentinels (user typed just `"‣"`).
-- If the user's response is one of `"skip"`, `"no"`, `"forget it"`, `"nevermind"`, `"cancel"` (case-insensitive) — treat as "user aborted the skip" and go to 4d.
-- If validation fails otherwise (empty after trim, too long, sentinel) — re-prompt once with clarification. If the second response also fails, go to 4d.
-
-If validation passes on first or second attempt, `proposed_title = <validated response>`. Proceed to 4b.
-
-#### 4b. Confirm the skip
-
-Surface to the user:
-
-> "This meeting looks empty — no transcript, no summary, no notes. Proposed title: `<proposed_title>`. Mark Review Status = Skipped?"
+> "This meeting looks empty — no transcript, no summary, no notes. Skip or push through with a manual review?"
 
 Wait for explicit user confirmation. NEVER auto-skip.
 
-If the user declines the skip itself (says "no", "not now", "let me look at it first"), exit the fast-path cleanly — the row stays in its current state. The skill may offer to continue with a normal review at the user's discretion, but there's no content to triage so this typically ends the invocation.
+**On "skip":**
 
-#### 4c. Write the skip
+1. **Extract the block-level AI title from the Step 3 fetched content:**
+   - **Shape A:** the first bold-wrapped heading-line inside `<meeting-notes>` (e.g. `**Claude Teams vs Enterprise Decision Meeting** <mention-date start="2026-04-21"/>`). Strip `<mention-date/>` spans and markdown emphasis markers (`**`). Trim.
+   - **Shape B:** the value on the `## AI Title: <title>` heading_2 block.
+   - Apply sentinel validation: reject if the extracted string is empty, whitespace-only, longer than 200 chars, or equals `"‣"`.
+2. **If no usable block-level title,** prompt:
+   > "No AI title on this one — what should we call it?"
+   - Apply the same sentinel validation on the user's response.
+   - Accept "skip", "no", "forget it", "nevermind", "cancel" (case-insensitive) as "user aborted the skip" — exit cleanly without writing.
+   - On invalid response (empty / too long / sentinel), re-prompt once. If the second response also fails, abort the skip cleanly.
+3. **Atomic write:**
+   ```
+   mcp__claude_ai_Notion__notion-update-page({
+     page_id: "<meeting_id>",
+     command: "update_properties",
+     properties: {
+       "Title": "<validated_title>",
+       "Review Status": "Skipped"
+     },
+     content_updates: []
+   })
+   ```
+4. **Echo:**
+   - If title came from block extraction: `Skipped. Renamed to "<validated_title>" (from block AI title). Status → Skipped. Edit via /luke-edit if you want a different title.`
+   - If title came from user prompt: `Skipped. Renamed to "<validated_title>". Status → Skipped. Edit via /luke-edit if you want a different title.`
+   - On clean abort: `No changes made. The meeting stays in its current state (Review Status: null). Come back when you have a title, or edit the meeting in Notion directly and re-run /luke-meeting-review.`
 
-On user confirmation in 4b:
+**On "push through":**
+Proceed to Step 5 (Phase 1 triage) normally. The rest of the flow runs unchanged; content is just thin.
 
-- If the `preserved` flag from 4a Path A is set → one `notion-update-page` call with `update_properties` setting ONLY `Review Status: "Skipped"` (leave existing `Title` alone).
-- Otherwise → one `notion-update-page` call setting BOTH `Title: <proposed_title>` AND `Review Status: "Skipped"` in the `properties` map, following the same multi-property pattern used by `luke-meeting-commit` Step 7 (Title, Domain, Initiative, Summary, Review Status in one call).
-
-Example of the combined write:
-
-```
-mcp__claude_ai_Notion__notion-update-page({
-  page_id: "<meeting_id>",
-  command: "update_properties",
-  properties: {
-    "Title": "<proposed_title>",
-    "Review Status": "Skipped"
-  },
-  content_updates: []
-})
-```
-
-The atomic multi-property write eliminates the half-written state that produced the existing orphan `"‣"` rows.
+**If non-empty:** proceed directly to Step 5 without the inline prompt.
 
 **Do NOT attempt to trash via MCP** — MCP has no `in_trash` support. If the user genuinely wants the meeting deleted, tell them to trash it from the Notion UI.
 
-#### 4d. Echo the outcome
-
-After the write (or on clean abort), report the outcome to the user. Four response shapes:
-
-Case — `ai_title` populated and used:
-```
-Skipped. Renamed to "<proposed_title>" (from ai_title).
-Status → Skipped. Edit via /luke-edit if you want a different title.
-```
-
-Case — user supplied the title:
-```
-Skipped. Renamed to "<proposed_title>".
-Status → Skipped. Edit via /luke-edit if you want a different title.
-```
-
-Case — existing Title preserved (Path A):
-```
-Skipped. Kept existing title: "<current Title>".
-Status → Skipped.
-```
-
-Case — user aborted the title prompt or declined the skip (no write happened):
-```
-No changes made. The meeting stays in its current state (Review Status: <current value>).
-Come back when you have a title, or edit the meeting in Notion directly and re-run /luke-meeting-review.
-```
-
 #### NEVER auto-skip
 
-Historical: earlier in this project, bulk-trashing 4 rows without user confirmation destroyed content that had to be restored. The confirmation gate in 4b is non-negotiable. No write happens without both (a) a valid proposed title and (b) explicit user confirmation of the skip.
+Historical incident: earlier in this project, bulk-trashing 4 rows without user confirmation destroyed content that had to be restored. The confirmation gate above is non-negotiable. No write happens without both (a) a valid title (block-extracted or user-supplied) and (b) explicit user confirmation of the skip.
 
 ### Step 5: Phase 1 — Triage
 
@@ -422,7 +367,17 @@ Leave `ready_for_commit: false`. User flips to `true` when they're ready to hand
 
 ### Step 10: Handoff
 
-> "Draft saved to `<path>`. Review the frontmatter/body if you want to tweak anything. When ready, flip `ready_for_commit: true` and invoke `/luke-meeting-commit` to push to Notion."
+> "Draft saved to `<path>`. Review it if you want, or say 'push' to send to Notion now."
+
+On user confirmation with an affirmative verb (`push`, `send`, `send it`, `yes push`, `go`, `go ahead`):
+
+1. `Read` the draft markdown file.
+2. Flip `ready_for_commit: false` → `ready_for_commit: true` in the YAML frontmatter via the `Write` tool (re-write the whole file with the one-line change).
+3. Explicitly invoke `/luke-meeting-commit` — do not ask the user again.
+
+Anything short of an affirmative verb ("yeah looks good", "cool", "thanks") leaves the draft at `ready_for_commit: false`. User can re-invoke `/luke-meeting-review` later or say "push" next time.
+
+Manual YAML editing is NOT a documented user action. If the user wants to tweak the draft body/tasks before push, they open the file themselves; the skill never instructs them to edit YAML.
 
 ## Required Output Sections (cannot drop)
 
