@@ -341,7 +341,7 @@ Then the **open-prompt escape hatch:**
 
 Do NOT auto-attach. User confirmation is mandatory. If no spec path is cited in the transcript, the field stays absent.
 
-All three prompts are optional — user always has a `skip` escape. Absent fields must stay absent in the draft (do not write empty strings or placeholder values).
+These prompts are all optional — user always has a `skip` escape. Absent fields must stay absent in the draft (do not write empty strings or placeholder values).
 
 ### Step 9: Write the draft markdown
 
@@ -406,7 +406,7 @@ Body structure:
 
 Rules:
 - Plain `- key: value` only. No bold markdown (not `- **key:** value`).
-- `initiative`, `priority`, `status`, `notes` are required. All others are optional — omit the line entirely if no value (do NOT write empty strings).
+- `initiative` is required. `priority`, `status`, and `notes` should always be set on a review-sourced task (the commit parser defaults to `P2` / `To Do` / empty, but meeting drafts should never rely on defaults). All other fields are optional — omit the line entirely if no value (do NOT write empty strings).
 - `area` is a bracketed list (1–2 values). Valid only for Coresynq-domain tasks.
 - `client` is a single value (school name). Valid only for Rezzy-domain tasks.
 - `source_spec` is a file path. Set when the task derives from a spec doc referenced in the transcript.
