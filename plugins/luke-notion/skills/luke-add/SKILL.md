@@ -1,6 +1,6 @@
 ---
 name: luke-add
-description: ALWAYS invoke this skill for creating tasks - contains required routing and domain config. Use when user mentions something to do, wants to track something, or capture action items.
+description: ALWAYS invoke this skill for creating tasks - contains required routing and domain config. Use when user mentions something to do, wants to track something, or capture action items. NOT for pushing meeting review drafts — use /luke-meeting-commit for that path.
 allowed-tools: Bash, Read, mcp__claude_ai_Notion__notion-create-pages, mcp__claude_ai_Notion__notion-fetch, mcp__claude_ai_Notion__notion-search, mcp__claude_ai_Notion__notion-update-data-source
 ---
 
@@ -98,7 +98,7 @@ Multiple areas fine (1-2, not 5). If no fit, ask user.
 1. Parse user intent → title, domain, initiative, priority, assignee, notes, due date
 2. Announce: "Adding to [Domain] — [Initiative]" (or "Adding to intake — no Initiative" if untriaged)
 3. Create via `mcp__claude_ai_Notion__notion-create-pages`:
-   - parent: { type: "data_source_id", data_source_id: "collection://b0d00fd8-eebb-434d-84c1-a652260fbe79" }
+   - parent: { type: "data_source_id", data_source_id: "b0d00fd8-eebb-434d-84c1-a652260fbe79" }
    - pages: [{ properties: { "Title": "task title", "Status": "To Do", "Priority": "P2", "Initiative": "[\"<initiative_page_url>\"]", "Notes": "context notes" } }]
    - Add `"Area": "[\"Billing\"]"` only for Coresynq-domain tasks
    - Add `"Client": "School Name"` only for Rezzy-domain tasks when a client is relevant
