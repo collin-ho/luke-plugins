@@ -48,6 +48,7 @@ Tasks live under `## Tasks (curated — 🟢 keep)`. Each task block starts with
 | `area` | no | — | Coresynq only, array |
 | `client` | no | — | Rezzy only, single select |
 | `source` | no | `review-conversation` | transcript-quote / review-conversation / ai-cross-ref |
+| `source_spec` | no | — | Spec file path when the task derives from a spec doc |
 | `notes` | no | — | Multi-line via `notes: \|` block, indented 4 spaces |
 
 ### Step 4: Dry-run preview
@@ -98,7 +99,8 @@ mcp__claude_ai_Notion__notion-create-pages({
         "date:Due Date:is_datetime": 0,
         "Assignee": "[\"<user_id>\"]",
         "Area": "[\"Billing\",\"Claims\"]",
-        "Client": "Duke"
+        "Client": "Duke",
+        "Source Spec": "<source_spec>"
       }
     },
     // ... one object per task
