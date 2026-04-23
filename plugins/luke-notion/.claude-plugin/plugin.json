@@ -1,6 +1,6 @@
 {
   "name": "luke-notion",
-  "version": "0.2.6",
+  "version": "0.2.7",
   "description": "Task and meeting workflow skills for Collin's canonical Notion workspace. MCP-first: uses Claude.ai's hosted Notion connector for most operations plus a bundled single-tool MCP server for exhaustive data-source queries that exceed the hosted cap.",
   "author": {
     "name": "Collin Hoben"

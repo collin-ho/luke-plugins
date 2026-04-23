@@ -88,6 +88,8 @@ Use this table to **suggest** the right Initiative, not to pick a DB. All tasks 
 | Notifications | bell, preferences |
 | Skill Docs | billing rules, knowledge |
 | Workflow | dispatch, assignment, routing |
+| R2-Decision | R2 phase, decision pending, awaiting sign-off |
+| R2-Deferred | R2 phase, deferred, not this round |
 
 Multiple areas fine (1-2, not 5). If no fit, ask user.
 
