@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "coresynq-team": {
+      "transport": "http",
+      "url": "https://REPLACE_WITH_MAC_MINI_FUNNEL_HOSTNAME/mcp",
+      "headers": {
+        "Authorization": "Bearer ${TEAM_KEY}"
+      }
+    }
+  }
+}

@@ -10,6 +10,11 @@
       "source": "./plugins/luke-notion",
       "description": "Notion-native task, meeting, and taxonomy skills against Collin's canonical cortex workspace.",
       "version": "0.2.3"
+    },
+    {
+      "name": "coresynq-team",
+      "source": "./plugins/coresynq-team",
+      "description": "Add, view, and complete Coresynq tasks from Claude Code (private MCP-backed)."
     }
   ]
 }

@@ -1,0 +1,14 @@
+{
+  "name": "coresynq-team",
+  "version": "0.1.0",
+  "description": "Add, view, and complete Coresynq tasks from Claude Code. Backed by a private MCP server.",
+  "author": { "name": "Collin Hoben" },
+  "config": [
+    {
+      "name": "TEAM_KEY",
+      "description": "Your private API key for the coresynq-team server. Provided by Collin.",
+      "required": true,
+      "secret": true
+    }
+  ]
+}
