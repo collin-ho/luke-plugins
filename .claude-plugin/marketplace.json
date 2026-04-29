@@ -15,7 +15,7 @@
       "name": "coresynq-team",
       "source": "./plugins/coresynq-team",
       "description": "Add, view, and complete Coresynq tasks from Claude Code (private MCP-backed).",
-      "version": "0.1.0"
+      "version": "0.2.0"
     }
   ]
 }

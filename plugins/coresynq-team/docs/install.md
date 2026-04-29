@@ -1,32 +1,106 @@
-# Install
+# Install — coresynq-team
 
-Once Collin has sent you your `TEAM_KEY`:
+This is the plugin that lets you create and complete Coresynq tasks by talking to Claude. Setup is one-time and takes ~3 minutes.
 
-1. **Install Claude Code** if you haven't.
-2. **Add the marketplace** (one-time):
-   ```
-   /plugin marketplace add collin-ho/luke-plugins
-   ```
-3. **Install this plugin:**
-   ```
-   /plugin install coresynq-team@luke-plugins
-   ```
-4. **Paste your TEAM_KEY** when prompted.
+## Before you start
 
-## Verify
+You'll need:
+- **Claude Code** open. Either the desktop app on your Mac, or the terminal version — both work the same.
+- **Your team key** from Collin. It's a long random string. He sends it to you over a secure channel (Signal, 1Password share, etc.). Don't paste it into email or Slack.
 
-Type into chat: **"who am I?"**
+If you don't have your team key yet, message Collin and he'll generate one for you.
 
-Claude should call `whoami` and return your name + email. If it does, you're good.
+## Setup
 
-## Try it
+Each step below is something you type into Claude Code's chat input. Press Enter after each one. Wait for it to finish before typing the next one.
 
-- "Add a task to fix the unmatched-claims script for coresynq"
-- "What's on my plate?"
-- "Mark CTX-1234 as done"
+### 1. Add the marketplace (one-time)
 
-## If something doesn't work
+```
+/plugin marketplace add collin-ho/luke-plugins
+```
 
-- 401 errors → your `TEAM_KEY` is wrong or you're not in `auth.json`. Ping Collin.
-- "tool not available" → you're using a tool your role doesn't have. Ask in chat what's available.
-- Anything else → ping Collin with the error message and the command you tried.
+This tells Claude Code where to find the plugin. You only do this once on this machine — even if you reinstall the plugin later, you don't redo this step.
+
+### 2. Install the plugin
+
+```
+/plugin install coresynq-team@luke-plugins
+```
+
+Claude Code will pop up a dialog titled **"Team key"** with a masked input field. **Paste your team key from Collin and press OK.**
+
+The key is stored securely in your Mac's Keychain. You won't be asked for it again on this machine.
+
+### 3. Verify it works
+
+In the chat, type:
+
+```
+who am I?
+```
+
+Claude should respond with your name and email. If it does, you're done.
+
+## What you can do now
+
+Just talk to Claude normally. Some examples:
+
+**Add a task**
+> "Add a task to fix the unmatched-claims script for coresynq"
+>
+> "Remind me to follow up with the EPCR team about the demo"
+
+**See your tasks**
+> "What's on my plate?"
+>
+> "Show me my Coresynq tasks"
+
+**Mark something done**
+> "Mark CTX-1234 as done"
+>
+> "I finished the demo prep, complete that task"
+
+You don't need to remember exact command names — just describe what you want and Claude will pick the right tool.
+
+## What "role" you have
+
+Your team key determines what you can do. There are two roles:
+
+- **Noob** — add tasks, see your own tasks, complete your own tasks.
+- **Co-dev** — read and write across all Coresynq tasks for the whole team, can update priorities/assignees/etc.
+
+You don't choose your role. Collin sets it when he generates your key. If you think you have the wrong role, ask him.
+
+To see what tools are available to you, type "what can you do?" in chat.
+
+## When something doesn't work
+
+| What you see | What it means | What to do |
+| :--- | :--- | :--- |
+| `unauthorized` or `401` | Your team key is wrong, expired, or you're not in the team list | Ping Collin |
+| `Tool 'X' not available for your policy` | You're trying to use a tool your role doesn't have | That's expected; ask Collin if you need a role bump |
+| `RATE_LIMITED` | Notion is being slow; the server already retried | Wait a few seconds and try again |
+| Anything else | Genuine bug or server-side issue | Send Collin the full error text + what you typed |
+
+## If you lose your team key
+
+Ping Collin. He'll rotate it (the old one stops working immediately) and send you a new one. Then re-run step 2 above — Claude Code will prompt for the new key.
+
+## Updating the plugin
+
+When Collin pushes a new version, run:
+
+```
+/plugin update coresynq-team@luke-plugins
+```
+
+Your team key carries over — you don't have to re-enter it.
+
+## Uninstalling
+
+```
+/plugin uninstall coresynq-team@luke-plugins
+```
+
+This removes the plugin and its team key from your machine.

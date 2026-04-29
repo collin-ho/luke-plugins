@@ -4,7 +4,7 @@
       "transport": "http",
       "url": "https://mac-mini.taildd870d.ts.net/mcp",
       "headers": {
-        "Authorization": "Bearer ${TEAM_KEY}"
+        "Authorization": "Bearer ${user_config.team_key}"
       }
     }
   }

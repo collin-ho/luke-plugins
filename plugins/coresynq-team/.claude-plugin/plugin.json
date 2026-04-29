@@ -1,14 +1,15 @@
 {
   "name": "coresynq-team",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Add, view, and complete Coresynq tasks from Claude Code. Backed by a private MCP server.",
   "author": { "name": "Collin Hoben" },
-  "config": [
-    {
-      "name": "TEAM_KEY",
-      "description": "Your private API key for the coresynq-team server. Provided by Collin.",
-      "required": true,
-      "secret": true
+  "userConfig": {
+    "team_key": {
+      "type": "string",
+      "title": "Team key",
+      "description": "Your bearer token. You'll get this from Collin when you're added to the team.",
+      "sensitive": true,
+      "required": true
     }
-  ]
+  }
 }
