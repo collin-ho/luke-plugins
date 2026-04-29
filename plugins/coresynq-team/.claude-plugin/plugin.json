@@ -1,6 +1,6 @@
 {
   "name": "coresynq-team",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Add, view, and complete Coresynq tasks from Claude Code. Backed by a private MCP server.",
   "author": { "name": "Collin Hoben" },
   "userConfig": {

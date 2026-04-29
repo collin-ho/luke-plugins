@@ -67,8 +67,8 @@ You don't need to remember exact command names — just describe what you want a
 
 Your team key determines what you can do. There are two roles:
 
-- **Noob** — add tasks, see your own tasks, complete your own tasks.
-- **Co-dev** — read and write across all Coresynq tasks for the whole team, can update priorities/assignees/etc.
+- **Noob** — add tasks, see your own tasks, see all team tasks (read-only), complete your own tasks.
+- **Co-dev** — everything noobs can do, plus update/reassign/complete tasks across the whole team.
 
 You don't choose your role. Collin sets it when he generates your key. If you think you have the wrong role, ask him.
 

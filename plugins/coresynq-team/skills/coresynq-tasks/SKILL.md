@@ -1,6 +1,6 @@
 ---
 name: coresynq-tasks
-description: Use when the user wants to see Coresynq team work broadly — not just their own tasks. Triggers: "show me everything in coresynq", "what's blocked across the team", "P0 work this week", "all open Billing tasks". Co-dev only — silently no-ops for noob users (the underlying tool isn't exposed to them).
+description: Use when the user wants to see Coresynq team work broadly — not just their own tasks. Triggers: "show me everything in coresynq", "what's blocked across the team", "P0 work this week", "all open Billing tasks", "what's Karen working on". Available to both noobs and co-devs (read-only for both via this skill).
 allowed-tools: mcp__coresynq-team__list_coresynq_tasks
 ---
 
@@ -30,5 +30,5 @@ Broader query than `my-tasks`. Returns Coresynq-domain tasks across the team.
 
 ## Edge cases
 
-- If the user is on the noob policy, this skill won't have a tool to call. Skill effectively no-ops; the LLM should fall back to `my-tasks` semantics or politely say *"That view isn't available to your account."*
 - Results capped at 200. If you suspect more, say so explicitly.
+- This is read-only. To update or complete someone else's task, the user needs co-dev role — politely say *"You can see this task but only co-devs can update it. Ping Collin if you need a role bump."*

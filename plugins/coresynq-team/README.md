@@ -6,8 +6,8 @@ Backed by a private MCP server. You need a **team key** from Collin to use it. S
 
 ## What you get (depends on your role)
 
-- **Noob:** add tasks for `coresynq` or `epcr`, see your own tasks, mark them done.
-- **Co-dev:** full read/write across Coresynq-domain tasks for the whole team — update priorities, reassign, change initiatives, etc.
+- **Noob:** add tasks for `coresynq` or `epcr`. See your own tasks. See all team tasks (read-only). Mark your own tasks done.
+- **Co-dev:** everything noobs can do, plus full read/write across Coresynq-domain tasks for the whole team — update priorities, reassign, change initiatives, complete others' tasks.
 
 You don't pick your role — your team key determines what's available. Run "who am I?" in chat to verify the install. Run "what can you do?" to see the tools you have.
 
