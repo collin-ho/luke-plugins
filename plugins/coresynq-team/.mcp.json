@@ -2,7 +2,7 @@
   "mcpServers": {
     "coresynq-team": {
       "transport": "http",
-      "url": "https://REPLACE_WITH_MAC_MINI_FUNNEL_HOSTNAME/mcp",
+      "url": "https://mac-mini.taildd870d.ts.net/mcp",
       "headers": {
         "Authorization": "Bearer ${TEAM_KEY}"
       }
