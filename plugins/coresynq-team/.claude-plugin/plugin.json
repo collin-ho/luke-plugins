@@ -1,15 +1,9 @@
 {
   "name": "coresynq-team",
-  "version": "0.2.1",
-  "description": "Add, view, and complete Coresynq tasks from Claude Code. Backed by a private MCP server.",
+  "version": "1.0.0",
+  "description": "Coresynq team skills: add, complete, and view tasks in the Coresynq Notion workspace. Routes through the hosted Notion MCP — no team key required.",
   "author": { "name": "Collin Hoben" },
-  "userConfig": {
-    "team_key": {
-      "type": "string",
-      "title": "Team key",
-      "description": "Your bearer token. You'll get this from Collin when you're added to the team.",
-      "sensitive": true,
-      "required": true
-    }
-  }
+  "homepage": "https://github.com/collin-ho/luke-plugins",
+  "repository": "https://github.com/collin-ho/luke-plugins",
+  "keywords": ["notion", "coresynq", "tasks"]
 }
