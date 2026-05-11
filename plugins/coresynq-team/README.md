@@ -1,19 +1,53 @@
 # coresynq-team
 
-Claude Code plugin for working with Coresynq tasks in Notion. Add, view, and complete tasks by talking to Claude.
+Claude Code skills for the Coresynq team to add, complete, and view tasks in the Coresynq Notion workspace.
 
-Backed by a private MCP server. You need a **team key** from Collin to use it. See [`docs/install.md`](docs/install.md) for setup — takes about 3 minutes.
+## What you get
 
-## What you get (depends on your role)
+Four skills under the `coresynq-team` plugin:
 
-- **Noob:** add tasks for `coresynq` or `epcr`. See your own tasks. See all team tasks (read-only). Mark your own tasks done.
-- **Co-dev:** everything noobs can do, plus full read/write across Coresynq-domain tasks for the whole team — update priorities, reassign, change initiatives, complete others' tasks.
+- `/coresynq-team:coresynq-add-task` — capture a new task
+- `/coresynq-team:coresynq-complete-task` — mark a task done
+- `/coresynq-team:coresynq-my-tasks` — list your open tasks
+- `/coresynq-team:coresynq-tasks` — full team view
 
-You don't pick your role — your team key determines what's available. Run "who am I?" in chat to verify the install. Run "what can you do?" to see the tools you have.
+Every mutation (add, complete) writes an audit row to the `Coresynq Changelog` DB for recovery + traceability.
 
-## Skills included
+## Install
 
-- `add-task` — create new tasks against the `coresynq` or `epcr` projects
-- `my-tasks` — list your own open tasks
-- `complete-task` — mark your tasks done by Task ID
-- `coresynq-tasks` (co-dev only) — list / filter / update / complete tasks across the team
+1. In Claude Code (terminal CLI — desktop app's `/plugin` is currently incomplete, see [anthropics/claude-code#42142](https://github.com/anthropics/claude-code/issues/42142)):
+
+   ```
+   /plugin marketplace add collin-ho/luke-plugins
+   /plugin install coresynq-team@luke-plugins
+   ```
+
+2. Connect Notion via `/mcp` → find `claude.ai Notion` → click to connect, complete the auth flow in your browser.
+
+3. Confirm:
+
+   ```
+   /mcp
+   ```
+
+   You should see `claude.ai Notion · connected`.
+
+4. Test:
+
+   ```
+   /coresynq-team:coresynq-my-tasks
+   ```
+
+   Should list your assigned Coresynq tasks (probably empty for new teammates).
+
+## Notion access
+
+Collin will add you to the Coresynq teamspace in Notion. You'll see only Coresynq content — Cogent, Rezzy, and Collin's personal work are in separate teamspaces and not visible to you.
+
+## If your Notion session expires
+
+Skills will tell you. Run `/mcp` → find `claude.ai Notion` → reconnect → retry your last command.
+
+## Questions
+
+Slack-DM Collin.
