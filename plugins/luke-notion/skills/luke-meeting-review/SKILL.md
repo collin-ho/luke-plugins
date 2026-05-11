@@ -93,14 +93,13 @@ Present as a numbered list. Ask the user to pick by number, ID, or refined hint.
 
 Once a meeting ID is confirmed, proceed to Step 1.
 
-### Step 0.5: cortex Triage
+### Step 0.5: Cortex Inbox Triage
 
-Before reviewing the meeting, check for untriaged tasks in the canonical Tasks DB.
+Before reviewing the meeting, check for untriaged tasks in the Cortex Inbox (the renamed cortex Tasks DB — collin's private quick-add inbox).
 
-**Canonical Tasks DB ID:** `4de35153-f31d-4427-bc5a-1c3b1c08648e`
-**Data source:** `collection://b0d00fd8-eebb-434d-84c1-a652260fbe79`
+**Cortex Inbox data source:** `collection://b0d00fd8-eebb-434d-84c1-a652260fbe79`
 
-All tasks live in this single DB. "Triage" means assigning an Initiative to tasks that don't have one yet.
+Post-refactor, Cortex Inbox holds tasks that didn't get an Initiative at creation time (untriaged intake). "Triage" means **moving** these tasks into their proper per-business Tasks DB and assigning the right Initiative.
 
 Query via the bundled dump server:
 
@@ -108,31 +107,27 @@ Query via the bundled dump server:
 mcp__plugin_luke-notion_luke-notion__dump-data-source({
   data_source_id: "b0d00fd8-eebb-434d-84c1-a652260fbe79",
   filter: {
-    "and": [
-      {"property": "Initiative", "relation": {"is_empty": true}},
-      {"or": [
-        {"property": "Status", "status": {"equals": "Backlog"}},
-        {"property": "Status", "status": {"equals": "To Do"}}
-      ]}
+    "or": [
+      {"property": "Status", "select": {"equals": "Backlog"}},
+      {"property": "Status", "select": {"equals": "To Do"}}
     ]
   }
 })
 ```
 
-(If the Tasks DS uses `select` instead of `status` for the Status property, swap `"status":` for `"select":` in the filter clauses.)
+(All Cortex Inbox rows are untriaged by definition — they're in the inbox BECAUSE they have no initiative. Filter is just by Status to focus on open ones.)
 
-When the query returns results, present them immediately as a numbered list. Do NOT ask whether to triage first — present, then ask which initiative each goes to.
+When the query returns results, present them immediately as a numbered list. Do NOT ask whether to triage first — present, then ask which domain + initiative each goes to.
 
-> "Found N untriaged tasks (no Initiative assigned) before we start the review:"
+> "Found N untriaged Cortex Inbox tasks. For each, which Domain + Initiative?"
 >
 > 1. Task title — Status · Created date
 > 2. ...
->
-> "For each: which Initiative should this belong to? (or skip to defer)"
 
-For each item the user assigns an Initiative:
-1. Update the existing task via `mcp__claude_ai_Notion__notion-update-page` to set the **Initiative** relation to the user's chosen initiative.
-2. That's it — no creation or archiving needed. The task stays in place, now properly categorized.
+For each item the user assigns a Domain + Initiative:
+
+1. **Create a new task** in the matching domain's Tasks DB (Cogent / Coresynq / Rezzy / Personal — data source IDs in `/luke-add`). Copy over Title, Status, Priority, Due Date, Notes, Source Spec, Assignee, Legacy Task ID. Set Initiative to the resolved page URL.
+2. **Archive the Cortex Inbox row** via `mcp__claude_ai_Notion__notion-update-page` with `properties: {"Status": "Archived"}` and content_updates: `[{op: "trash"}]` (or set `Status: Archived` for soft-archive without trashing).
 
 If no untriaged items exist, skip silently and proceed to Step 1.
 
@@ -147,7 +142,7 @@ mcp__claude_ai_Notion__notion-fetch on the resolved meeting ID
 This provides the full page properties and content needed for triage.
 
 **Local operations** (still required):
-- **Initiative resolution:** use `notion-search` scoped to `collection://28a0a1b7-d639-4e34-898f-e19415823dec` when you need to resolve an Initiative by name. Cache results in-session.
+- **Initiative resolution:** scope `notion-search` to the meeting's domain's Initiatives data source (resolved from `frontmatter.triage.domain` or the meeting's `Domain` field). Per-domain data source IDs are in `/luke-add` and `/luke-dump`. Do NOT use the old cortex Initiatives DB (`collection://28a0a1b7-d639-4e34-898f-e19415823dec`) — it's frozen post-refactor and contains pre-migration initiatives only. Cache results in-session.
 - **Draft check:** look for an existing draft in `~/.claude/luke/drafts/meeting-reviews/` matching this meeting ID (resume vs. new). This is a user-global location — independent of Claude Code's current working directory.
 - **Carry-forward scan:** check for unresolved items from prior reviews of this meeting.
 
