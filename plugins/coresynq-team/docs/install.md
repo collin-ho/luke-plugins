@@ -1,18 +1,19 @@
 # Install — coresynq-team
 
-This is the plugin that lets you create and complete Coresynq tasks by talking to Claude. Setup is one-time and takes ~3 minutes.
+This is the plugin that lets you create, complete, and view Coresynq tasks by talking to Claude. Setup is one-time and takes ~3 minutes.
 
 ## Before you start
 
 You'll need:
-- **Claude Code** open. Either the desktop app on your Mac, or the terminal version — both work the same.
-- **Your team key** from Collin. It's a long random string. He sends it to you over a secure channel (Signal, 1Password share, etc.). Don't paste it into email or Slack.
 
-If you don't have your team key yet, message Collin and he'll generate one for you.
+- **Claude Code (terminal CLI).** The `/plugin` command is currently incomplete in the desktop app — see [anthropics/claude-code#42142](https://github.com/anthropics/claude-code/issues/42142). Run `claude` in your terminal.
+- **A personal Notion login.** Collin will add you to the Coresynq teamspace.
+
+No team key needed anymore — auth is handled by Notion's own connector.
 
 ## Setup
 
-Each step below is something you type into Claude Code's chat input. Press Enter after each one. Wait for it to finish before typing the next one.
+Each step below is something you type into Claude Code's chat input. Press Enter after each.
 
 ### 1. Add the marketplace (one-time)
 
@@ -20,7 +21,7 @@ Each step below is something you type into Claude Code's chat input. Press Enter
 /plugin marketplace add collin-ho/luke-plugins
 ```
 
-This tells Claude Code where to find the plugin. You only do this once on this machine — even if you reinstall the plugin later, you don't redo this step.
+Tells Claude Code where to find the plugin. One-time per machine.
 
 ### 2. Install the plugin
 
@@ -28,26 +29,30 @@ This tells Claude Code where to find the plugin. You only do this once on this m
 /plugin install coresynq-team@luke-plugins
 ```
 
-Claude Code will pop up a dialog titled **"Team key"** with a masked input field. **Paste your team key from Collin and press OK.**
+No team-key dialog this time around — auth is via the Notion connector instead.
 
-The key is stored securely in your Mac's Keychain. You won't be asked for it again on this machine.
-
-### 3. Verify it works
-
-In the chat, type:
+### 3. Connect Notion via /mcp
 
 ```
-who am I?
+/mcp
 ```
 
-Claude should respond with your name and email. If it does, you're done.
+In the list, find `claude.ai Notion`. If it shows `· disabled`, select it and follow the connect flow (you'll be redirected to Notion in your browser to authorize). You should end up with `claude.ai Notion · connected`.
+
+### 4. Verify it works
+
+```
+/coresynq-team:coresynq-my-tasks
+```
+
+Should list your assigned Coresynq tasks (probably empty for new teammates). If you see "no access" or a 404, ping Collin to add you to the Coresynq teamspace.
 
 ## What you can do now
 
 Just talk to Claude normally. Some examples:
 
 **Add a task**
-> "Add a task to fix the unmatched-claims script for coresynq"
+> "Add a task to fix the unmatched-claims script"
 >
 > "Remind me to follow up with the EPCR team about the demo"
 
@@ -57,50 +62,40 @@ Just talk to Claude normally. Some examples:
 > "Show me my Coresynq tasks"
 
 **Mark something done**
-> "Mark CTX-1234 as done"
+> "Mark CSQ-1234 as done"
 >
 > "I finished the demo prep, complete that task"
 
 You don't need to remember exact command names — just describe what you want and Claude will pick the right tool.
 
-## What "role" you have
+## What happens behind the scenes
 
-Your team key determines what you can do. There are two roles:
+Every time you add or complete a task, the skill ALSO writes a row to the **Coresynq Changelog** DB in Notion. This is a full audit trail of who did what and when. You can see it in the Coresynq teamspace.
 
-- **Noob** — add tasks, see your own tasks, see all team tasks (read-only), complete your own tasks.
-- **Co-dev** — everything noobs can do, plus update/reassign/complete tasks across the whole team.
-
-You don't choose your role. Collin sets it when he generates your key. If you think you have the wrong role, ask him.
-
-To see what tools are available to you, type "what can you do?" in chat.
+This isn't an attempt to be punitive — it's a safety net. If someone accidentally deletes or overwrites something, we can recover from the log. Operate normally.
 
 ## When something doesn't work
 
 | What you see | What it means | What to do |
 | :--- | :--- | :--- |
-| `unauthorized` or `401` | Your team key is wrong, expired, or you're not in the team list | Ping Collin |
-| `Tool 'X' not available for your policy` | You're trying to use a tool your role doesn't have | That's expected; ask Collin if you need a role bump |
-| `RATE_LIMITED` | Notion is being slow; the server already retried | Wait a few seconds and try again |
-| Anything else | Genuine bug or server-side issue | Send Collin the full error text + what you typed |
-
-## If you lose your team key
-
-Ping Collin. He'll rotate it (the old one stops working immediately) and send you a new one. Then re-run step 2 above — Claude Code will prompt for the new key.
+| `Your Notion session expired` | The Notion connector lost its token | Run `/mcp`, find `claude.ai Notion`, reconnect |
+| `404` or `Could not find database` | You haven't been added to the Coresynq teamspace yet | Ping Collin |
+| Rate-limit errors | Notion is being slow | Wait a few seconds and try again |
+| Skill output looks weird / outdated | Plugin might be stale | `/plugin update coresynq-team@luke-plugins`, then quit + restart Claude Code |
+| Anything else | Genuine bug | Send Collin the full error text + what you typed |
 
 ## Updating the plugin
 
-When Collin pushes a new version, run:
+When Collin pushes a new version:
 
 ```
 /plugin update coresynq-team@luke-plugins
 ```
 
-Your team key carries over — you don't have to re-enter it.
+Then restart Claude Code to pick up the changes.
 
 ## Uninstalling
 
 ```
 /plugin uninstall coresynq-team@luke-plugins
 ```
-
-This removes the plugin and its team key from your machine.

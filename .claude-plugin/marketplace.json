@@ -8,14 +8,14 @@
     {
       "name": "luke-notion",
       "source": "./plugins/luke-notion",
-      "description": "Notion-native task, meeting, and taxonomy skills against Collin's canonical cortex workspace.",
-      "version": "0.2.3"
+      "description": "Notion-native task, meeting, and taxonomy skills across Collin's per-business workspaces (Cogent / Coresynq / Rezzy / Personal + cortex meetings + Cortex Inbox).",
+      "version": "0.3.0"
     },
     {
       "name": "coresynq-team",
       "source": "./plugins/coresynq-team",
-      "description": "Add, view, and complete Coresynq tasks from Claude Code (private MCP-backed).",
-      "version": "0.2.1"
+      "description": "Coresynq team skills: add, complete, and view tasks. Routes through the hosted Notion MCP — no team key required. Audits every mutation to the Coresynq Changelog DB.",
+      "version": "1.0.0"
     }
   ]
 }

@@ -1,6 +1,6 @@
 ---
 name: luke-meeting-commit
-description: Push a meeting review draft to Notion — creates tasks in the canonical Tasks DB and updates meeting properties. ALWAYS use this skill after luke-meeting-review produces a draft flagged ready_for_commit. MCP-native — no local scripts required.
+description: Push a meeting review draft to Notion — creates tasks in the per-business Tasks DBs and updates meeting properties. ALWAYS use this skill after luke-meeting-review produces a draft flagged ready_for_commit. MCP-native — no local scripts required.
 allowed-tools: Read, Write, Edit, Bash, mcp__claude_ai_Notion__notion-search, mcp__claude_ai_Notion__notion-create-pages, mcp__claude_ai_Notion__notion-update-page, mcp__claude_ai_Notion__notion-get-users
 ---
 
@@ -8,26 +8,35 @@ allowed-tools: Read, Write, Edit, Bash, mcp__claude_ai_Notion__notion-search, mc
 
 Pure-MCP writer that pushes a curated review draft to Notion. Requires `frontmatter.ready_for_commit: true`. Idempotent — re-running on an already-committed draft no-ops.
 
-## Canonical DBs
+## Per-business Tasks + Initiatives DBs
 
-- **Tasks data source:** `collection://b0d00fd8-eebb-434d-84c1-a652260fbe79`
-- **Meetings data source:** `collection://db2e5ca6-92b7-4e39-ab23-f4c496d2636c`
-- **Initiatives data source:** `collection://28a0a1b7-d639-4e34-898f-e19415823dec`
+Tasks from a meeting review go to the per-business Tasks DB matching each task's domain (derived from its `initiative` name prefix). Initiative names follow `<Domain> – <Name>` format.
+
+| Domain | Tasks data source | Initiatives data source |
+|---|---|---|
+| Cogent | `e71b583f-242f-4b16-9dfa-d9a8d82949b8` | `9afa9c00-6eda-49c9-b022-f77656adff97` |
+| Coresynq | `fdb7593f-5d8f-4119-8006-da4ed3f5d0d3` | `2da4502c-9651-4d39-b837-0f5996b32209` |
+| Rezzy | `dde1524b-f5da-44a4-8c89-3479f180cc9d` | `ef52d445-66b4-4619-bdf1-903ac0f977f0` |
+| Personal | `a405e3f1-7196-4e23-afa4-c64f54c08ff7` | `5189917d-6eb0-4802-88ee-faa36378b085` |
+
+## Other canonical IDs
+
+- **Meetings data source (cortex, collin-only):** `db2e5ca6-92b7-4e39-ab23-f4c496d2636c`
 - **Collin user ID:** `1b1d872b-594c-81d5-8ae2-00027cffc129` (confirm via `notion-get-users` if ever in doubt)
 
 ## Execution
 
 ### Step 1: Locate and read the draft
 
-If the user supplies a path, use it. Otherwise find the most recent draft in the user-global draft directory:
+If the user supplies a path, use it. Otherwise find the most recent draft:
 
 ```bash
 ls -t ~/.claude/luke/drafts/meeting-reviews/*.md | head -1
 ```
 
-This location is fixed — independent of the Claude Code session's current working directory. If no files exist there, bail with "No review drafts found. Run `/luke-meeting-review` first."
+If no files exist, bail with "No review drafts found. Run `/luke-meeting-review` first."
 
-Read the draft with the `Read` tool. Parse the YAML frontmatter (between `---` markers) and the body.
+Read with `Read`. Parse YAML frontmatter and body.
 
 ### Step 2: Safety gates
 
@@ -40,57 +49,67 @@ Tasks live under `## Tasks (curated — 🟢 keep)`. Each task block starts with
 
 | Field | Required | Default | Notes |
 |---|---|---|---|
-| `initiative` | yes | — | Full name, e.g. `Cogent – ClickUp` |
+| `initiative` | yes | — | Full name with domain prefix, e.g. `Cogent – ClickUp`. Drives both target Tasks DB and Initiative relation. |
 | `priority` | no | `P2` | P0 / P1 / P2 / P3 |
 | `status` | no | `To Do` | Backlog / To Do / In Progress / Pending Review / Blocked / Done / Archived |
 | `due` | no | — | `YYYY-MM-DD` |
 | `assignee` | no | — | Notion user ID |
-| `area` | no | — | Coresynq only, array |
-| `client` | no | — | Rezzy only, single select |
+| `area` | no | — | Coresynq-domain tasks only, array |
+| `client` | no | — | Rezzy-domain tasks only, single select |
 | `source` | no | `review-conversation` | transcript-quote / review-conversation / ai-cross-ref |
 | `source_spec` | no | — | Spec file path when the task derives from a spec doc |
 | `notes` | no | — | Multi-line via `notes: \|` block, indented 4 spaces |
 
-### Step 4: Dry-run preview
+### Step 4: Group tasks by target domain
+
+Derive each task's target Domain from its `initiative` name prefix:
+- `Cogent – ...` → Cogent
+- `Coresynq – ...` → Coresynq
+- `Rezzy – ...` or `Rezzy External – ...` → Rezzy
+- `Personal – ...` → Personal
+
+Bucket tasks into per-domain groups. Each group will be one `notion-create-pages` call.
+
+### Step 5: Dry-run preview
 
 Show the user:
-- Each task with its Initiative, Status, Priority, Due.
-- Meeting property updates (Title, Domain, Initiative relation, Summary, Date, Review Status → Reviewed).
+- Each task with its target DB (e.g., "Coresynq Tasks"), Initiative, Status, Priority, Due.
+- Meeting property updates (Title, Domain, Initiative relation if mentioned, Summary, Date, Review Status → Reviewed).
+- Per-domain Tasks-relation updates that will be written on the meeting page after creation.
 - Ask: "Push to Notion? (y/n)"
 
 Don't proceed without `y`.
 
-### Step 5: Resolve initiative page IDs
+### Step 6: Resolve initiative page IDs (per domain)
 
-Collect the distinct initiative names from the parsed tasks AND `frontmatter.triage.initiatives.primary` AND `.secondary` (if set).
-
-For each distinct name, search:
+For each domain group, collect distinct initiative names. Search the matching per-business Initiatives DB:
 
 ```
 mcp__claude_ai_Notion__notion-search({
   query: "<initiative name>",
-  data_source_url: "collection://28a0a1b7-d639-4e34-898f-e19415823dec",
+  data_source_url: "collection://<that domain's Initiatives ds_id>",
   filters: {},
   page_size: 5,
   max_highlight_length: 0
 })
 ```
 
-Pick the exact-name match (initiative names are unique). Build a map `{name → page_id}`. If a name doesn't resolve, bail and tell the user — don't silently fall back.
+Pick the exact-name match. Build per-domain maps `{name → page_id}`. If any name doesn't resolve in the expected domain's DB, bail and tell the user — don't silently fall back to another domain.
 
 Initiative page URL format for relations: `https://www.notion.so/<page_id_with_dashes_removed>`.
 
-### Step 6: Create tasks (single batched call)
+### Step 7: Create tasks (one batched call per domain)
+
+For each domain group with at least one task:
 
 ```
 mcp__claude_ai_Notion__notion-create-pages({
-  parent: { type: "data_source_id", data_source_id: "b0d00fd8-eebb-434d-84c1-a652260fbe79" },
+  parent: { type: "data_source_id", data_source_id: "<that domain's Tasks ds_id>" },
   pages: [
     {
       properties: {
         "Title": "<task title>",
         "Initiative": "[\"https://www.notion.so/<initiative_id_no_dashes>\"]",
-        "Related Meeting": "[\"https://www.notion.so/<meeting_id_no_dashes>\"]",
         "Status": "<status>",
         "Priority": "<priority>",
         "Notes": "<notes>",
@@ -98,19 +117,24 @@ mcp__claude_ai_Notion__notion-create-pages({
         "date:Due Date:start": "<due>",
         "date:Due Date:is_datetime": 0,
         "Assignee": "[\"<user_id>\"]",
+        // Coresynq tasks only:
         "Area": "[\"Billing\",\"Claims\"]",
+        // Rezzy tasks only:
         "Client": "Duke",
+        // optional:
         "Source Spec": "<source_spec>"
       }
-    },
-    // ... one object per task
+    }
+    // ... one object per task in this domain group
   ]
 })
 ```
 
-Single call = atomic per-batch. If it fails, no tasks get created; user can fix and retry safely. Capture the returned `id`s.
+**Do NOT** set `Related Meeting` — the relation is meeting-side only post-refactor. The Meeting page has per-domain Tasks relations that we'll update in Step 8.
 
-### Step 7: Update meeting properties
+Capture the returned `id` and `url` for each new task, keyed by domain.
+
+### Step 8: Update meeting properties + per-domain task relations
 
 ```
 mcp__claude_ai_Notion__notion-update-page({
@@ -119,46 +143,68 @@ mcp__claude_ai_Notion__notion-update-page({
   properties: {
     "Title": "<fm.triage.title>",
     "Domain": "<fm.triage.domain>",
-    "Initiative": "[\"<primary_url>\"]",  // append secondary URL to the array if set
+    // optional — only if meeting has its own Initiative (still points at frozen cortex Initiatives):
+    "Initiative": "[\"<primary_url>\"]",
     "Summary": "<fm.summary>",
     "Review Status": "Reviewed",
     "date:Date:start": "<fm.triage.date>",
     "date:Date:is_datetime": 1,
-    "Attendees": "[\"1b1d872b-594c-81d5-8ae2-00027cffc129\"]"
+    "Attendees": "[\"1b1d872b-594c-81d5-8ae2-00027cffc129\"]",
+    // Per-domain task relations — write the new task URLs to the matching relation column:
+    "Cogent Tasks": "[\"<cogent_task_1_url>\",\"<cogent_task_2_url>\"]",
+    "Coresynq Tasks": "[\"<coresynq_task_1_url>\"]",
+    "Rezzy Tasks": "[]",
+    "Personal Tasks": "[]"
   },
   content_updates: []
 })
 ```
 
+Only include the per-domain Tasks relation property if that domain had tasks created. Omit empty arrays where convenient.
+
+The Meeting's `Initiative` field continues to point at the **frozen** cortex Initiatives DB (`collection://28a0a1b7-d639-4e34-898f-e19415823dec`). Don't try to repoint it at per-business initiatives.
+
 Note: overwriting `Attendees` to just Collin is a v1 simplification. If the meeting has real human attendees we want to preserve, capture them from the meeting's existing `Attendees` during Step 1 and merge.
 
-### Step 8: Mark draft as committed
+### Step 9: Mark draft as committed
 
 Update the draft's frontmatter:
 
 ```yaml
 committed_at: <current ISO datetime>
 notion_writes:
-  tasks: [<created task id>, ...]
+  tasks:
+    cogent: [<created task ids>]
+    coresynq: [<created task ids>]
+    rezzy: [<created task ids>]
+    personal: [<created task ids>]
   meeting_page_updated: true
   review_log_appended: false   # intentionally skipped — draft file IS the audit trail
 ```
 
-Use the `Write` tool to rewrite the file.
+Use `Write` to rewrite the file.
 
-### Step 9: Confirm
+### Step 10: Confirm
 
 Show user:
-- N tasks created with their Notion URLs.
+- Per-domain task counts with their Notion URLs.
 - Meeting page URL.
 - Reminder: draft is marked committed — re-running will no-op.
 
 ## Failure Handling
 
-- Initiative name doesn't resolve → bail, tell user which one. Don't create partial state.
-- `notion-create-pages` fails → tell user, don't mark draft committed. Safe to retry.
-- `notion-update-page` fails after tasks created → tasks exist in Notion, but draft is not marked committed. On retry: Step 2 will bail with "already committed" only if we set `committed_at` too early. We don't — we only set `committed_at` AFTER both creates and meeting update succeed. So retry creates duplicate tasks. Mitigation: if Step 6 succeeded but Step 7 failed, tell user which task IDs already exist and ask them to trash them before retry.
+- Initiative name doesn't resolve in expected domain → bail, tell user which one + which domain. Don't create partial state.
+- `notion-create-pages` fails on one domain → tell user, don't mark draft committed. Other domain groups that succeeded BEFORE the failure exist in Notion. To retry safely: have user manually trash the partial successes, or accept duplicates on retry. Recommend ordering: process the largest domain group LAST so partial failures are smaller.
+- `notion-update-page` fails after tasks created → tasks exist in Notion, but draft is not marked committed. On retry: Step 2 will pass (no `committed_at` yet), Steps 6-7 will recreate all tasks (duplicates). Mitigation: tell the user which task IDs exist; ask them to trash before retry.
 
 ## Review log — intentionally skipped
 
-The original flow appended a `## Meeting Review Log` section to the meeting page content. MCP's page content editing is search-and-replace, making append clunky. The draft file on disk with `committed_at` set IS the audit trail — that's sufficient. If user wants a log on the Notion page, they can add it manually via Notion AI.
+The original flow appended a `## Meeting Review Log` section to the meeting page content. MCP's page content editing is search-and-replace, making append clunky. The draft file on disk with `committed_at` set IS the audit trail. Sufficient.
+
+## Reauth handling
+
+If any `mcp__claude_ai_Notion__*` call returns a 401-style error or "Could not find" permission failure:
+
+1. Tell the user: "Your Notion session expired. Open `/mcp` in Claude Code, find `claude.ai Notion` (or `notion`), and reconnect. Then retry your last action."
+2. Do NOT proceed — wait for the user to confirm reconnection.
+3. After they confirm, retry the original tool call once.
