@@ -162,7 +162,7 @@ mcp__claude_ai_Notion__notion-update-page({
 
 Only include the per-domain Tasks relation property if that domain had tasks created. Omit empty arrays where convenient.
 
-The Meeting's `Initiative` field continues to point at the **frozen** cortex Initiatives DB (`collection://28a0a1b7-d639-4e34-898f-e19415823dec`). Don't try to repoint it at per-business initiatives.
+Note: the meeting page's optional legacy `Initiative` field referenced a now-frozen cortex Initiatives DB (`28a0a1b7`, 404) — treat that field as deprecated and don't set it. Per-business initiative links live in the `X Initiative` relations.
 
 Note: overwriting `Attendees` to just Collin is a v1 simplification. If the meeting has real human attendees we want to preserve, capture them from the meeting's existing `Attendees` during Step 1 and merge.
 

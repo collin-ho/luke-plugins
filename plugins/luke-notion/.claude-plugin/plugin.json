@@ -1,19 +1,11 @@
 {
   "name": "luke-notion",
-  "version": "0.3.0",
-  "description": "Task and meeting workflow skills for Collin's canonical Notion workspace. MCP-first: uses Claude.ai's hosted Notion connector for most operations plus a bundled single-tool MCP server for exhaustive data-source queries that exceed the hosted cap.",
+  "version": "0.4.0",
+  "description": "Task, meeting, and taxonomy skills for Collin's Notion across per-business workspaces (Cogent / Coresynq / Rezzy / Personal + cortex meetings + Cortex Inbox). Uses Claude.ai's hosted Notion connector plus the ntn CLI; all routing, anchors, and conventions live in the bundled Notion Brain (README.md).",
   "author": {
     "name": "Collin Hoben"
   },
   "homepage": "https://github.com/collin-ho/luke-plugins",
   "repository": "https://github.com/collin-ho/luke-plugins",
-  "keywords": ["notion", "tasks", "meetings", "productivity"],
-  "userConfig": {
-    "NOTION_TOKEN": {
-      "type": "string",
-      "title": "Notion API Token",
-      "description": "Bearer token (starts with ntn_) used by the bundled MCP server for paginated queries past the hosted MCP's 100-row cap. Create at https://www.notion.so/my-integrations and connect it to the canonical DBs via each DB's ••• → Connections.",
-      "sensitive": true
-    }
-  }
+  "keywords": ["notion", "tasks", "meetings", "productivity"]
 }

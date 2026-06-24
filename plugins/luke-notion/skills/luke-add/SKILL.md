@@ -1,152 +1,72 @@
 ---
 name: luke-add
-description: ALWAYS invoke this skill for creating tasks - contains required routing and domain config. Use when user mentions something to do, wants to track something, or capture action items. NOT for pushing meeting review drafts — use /luke-meeting-commit for that path.
+description: ALWAYS invoke this skill for creating tasks. Routes a new task to the right per-business Tasks DB. Reads the Notion Brain (luke-notion README) for anchors/routing/conventions. NOT for pushing meeting review drafts — use /luke-meeting-commit.
 allowed-tools: Bash, Read, mcp__claude_ai_Notion__notion-create-pages, mcp__claude_ai_Notion__notion-fetch, mcp__claude_ai_Notion__notion-search, mcp__claude_ai_Notion__notion-update-data-source
 ---
 
 # Add Task Skill
 
-Each business has its own Tasks DB in its own teamspace. Domain → DB is a hard routing decision; the resolved Domain picks both the target Tasks DB and the Initiatives DB the task's Initiative relation must point at. Untriaged tasks (no clear domain) land in the Cortex Inbox.
+Capture a task and route it to the right per-business Tasks DB. **All anchors (data-source IDs), the repo→domain map, the task model, and conventions live in the Notion Brain** — read `${CLAUDE_PLUGIN_ROOT}/README.md` for any ID or routing detail. This skill is the *how*; the Brain is the *what*. Never hardcode IDs here.
 
-## Data Sources
+## Routing (Brain §4)
 
-| Domain | Tasks DB data source | Initiatives DB data source | Task ID prefix |
-|---|---|---|---|
-| Cogent | `collection://e71b583f-242f-4b16-9dfa-d9a8d82949b8` | `collection://9afa9c00-6eda-49c9-b022-f77656adff97` | `CGT-` |
-| Coresynq | `collection://fdb7593f-5d8f-4119-8006-da4ed3f5d0d3` | `collection://2da4502c-9651-4d39-b837-0f5996b32209` | `CSQ-` |
-| Rezzy | `collection://dde1524b-f5da-44a4-8c89-3479f180cc9d` | `collection://ef52d445-66b4-4619-bdf1-903ac0f977f0` | `RZY-` |
-| Personal | `collection://a405e3f1-7196-4e23-afa4-c64f54c08ff7` | `collection://5189917d-6eb0-4802-88ee-faa36378b085` | `PER-` |
-| Cortex Inbox (untriaged) | `collection://b0d00fd8-eebb-434d-84c1-a652260fbe79` | n/a | `CTX-` |
+Resolve the domain in this order:
+1. **Explicit mention** — "add to coresynq", "cogent task for clickup" → that domain.
+2. **Repo/cwd** — infer from the Brain's repo→domain map (unknown repos fall through to Personal).
+3. **Conversation context** — what we've been working on.
+4. **Ambiguous** — land in **Cortex Inbox** (untriaged). Do NOT guess.
 
-Initiative search is **scoped to the resolved Domain's Initiatives DB only** — never query a cross-domain Initiatives DB.
+Quick and clean — he's capturing something, don't slow him down. **Always announce** where it landed ("Adding to Coresynq Tasks — Coresynq – Posting", or "Adding to Cortex Inbox — untriaged"); he can redirect before creation.
 
-## Personality
-
-Quick and clean. He's capturing something, don't slow him down.
-- **Announce routing** — "Adding to Cogent Tasks — Cogent – ClickUp: Fix the auth bug"
-- **Infer from context** — repo, conversation, explicit mention
-- **Never silent** — always confirm where it landed
-
-## Domain Routing
-
-### Repo → Domain Inference
-
-| Repo path contains | Domain |
-|---|---|
-| `MFTtool-v2`, `MFR` | Cogent |
-| `docebo-cogent-uni`, `CUv10demo` | Cogent |
-| `teams-clickup-integration`, `hubspot` | Cogent |
-| `EMS-billing`, `ems-billing` | Coresynq |
-| `rezzy-analytics` | Rezzy |
-| `luke-v2`, `luke-ios`, `luke-trmnl` | Personal |
-| `notion-refactor`, `vault-mirror`, `obsidian-sync-agent` | Personal |
-
-### Routing Priority
-
-1. **Explicit mention** — "add to coresynq" or "cogent task for clickup" → resolve to that domain's DBs
-2. **Repo context** — infer domain from cwd using table above, then match Initiative within that domain's Initiatives DB
-3. **Conversation context** — if we've been talking about Rezzy, task probably belongs there
-4. **Ambiguous / no clear domain** — task lands in **Cortex Inbox** (untriaged). Do NOT guess.
-
-**Always announce:** "Adding to [Tasks DB] — [Initiative]" (or "Adding to Cortex Inbox — untriaged" if no domain). User can redirect before creation.
-
-## Canonical Properties (all tasks)
+## Properties
 
 | Property | Default | Notes |
 |---|---|---|
 | Title | *(from user)* | Short, action-oriented |
-| Status | To Do | Override only if user says blocked/backlog |
-| Priority | P2 | Override if urgency is explicit or obvious |
-| Initiative | *(inferred or asked)* | Relation to the resolved domain's Initiatives DB. Empty only for Cortex Inbox tasks. |
-| Assignee | *(empty)* | Set if user specifies a person |
-| Due Date | *(empty)* | Set if user mentions a date — use `date:Due Date:start` |
-| Notes | *(from context)* | 3-5 sentences max |
-| Source Spec | *(empty)* | Set if task derives from a spec doc |
+| Status | `To Do` | Override only if user says backlog/blocked |
+| Initiative | *(inferred or asked)* | Relation to the resolved domain's Initiatives DB. Empty only for Cortex Inbox. |
+| Assignee | *(empty)* | Set if a person is named |
+| Due Date | *(empty)* | `date:Due Date:start` if a date is mentioned |
+| Notes | *(from context)* | 3–5 sentences |
+| Source Spec | *(empty)* | Set if the task derives from a spec doc |
 
-**Do NOT** set: `Domain` field (does not exist post-refactor — teamspace IS the domain), `Related Meeting` field (relation is now meeting-side only — cortex Meetings DB has the Tasks relations).
+**Never set:** `Priority` (Collin doesn't use it), `Domain` (doesn't exist — teamspace IS the domain), `Related Meeting` (relation is meeting-side only), `Task ID` (auto, per-DB prefix).
 
-## Domain-Specific Properties
-
-**Coresynq** — infer `Area` from task content (multi-select):
-
-| Area | Keywords |
-|---|---|
-| Billing | claim form, line items, charge, payer |
-| Claims | 837, submission, validation, denial |
-| Config | settings, agency config, rates |
-| Dashboard | command center, KPI, charts |
-| ERA/835 | remittance, payment posting |
-| Eligibility | 270/271, coverage, Stedi |
-| Frontend | data-table, design system, dark mode |
-| Harness | agentic, pipeline, worker |
-| Import | NEMSIS, upload, PCR |
-| Pipeline | data integrity, transactions |
-| Review Queue | flags, workflow buckets |
-| UI/UX | component, layout, styling |
-| Comms | email, notification |
-| Operator | AI chat, TAOR, tools |
-| Observers | ambient intelligence, alerts |
-| Permissions | RBAC, role gating |
-| Notifications | bell, preferences |
-| Skill Docs | billing rules, knowledge |
-| Workflow | dispatch, assignment, routing |
-| Ops / Admin | infra, ops |
-| R2-Decision | R2 phase, decision pending, awaiting sign-off |
-| R2-Deferred | R2 phase, deferred, not this round |
-| Walk Prep | walkthrough, demo prep |
-
-Multiple areas fine (1-2, not 5). If no fit, ask user.
-
-**Rezzy** — set `Client` if a school is mentioned. Client options: Pitt, Wake Forest, Boston College, FSU, Brown, Duke, High Point, Clemson, UNC Chapel Hill. Also infer Initiative — internal uses "Rezzy – [Project]" naming, external client work uses "Rezzy External – [School]".
-
-**Cogent / Personal** — no domain-specific fields beyond the canonical set. Don't include `Area` or `Client`.
+**Domain-specific (resolve options on-demand — never memorize them):**
+- **Coresynq** — infer 1–2 `Area` values; fetch the live Area options from the Coresynq Tasks schema rather than assuming a list. Ask if no fit.
+- **Rezzy** — set `Client` (a school) if mentioned; initiative naming `Rezzy – <Project>` (internal) or `Rezzy External – <School>`.
+- **Cogent / Personal** — canonical set only; no Area/Client.
 
 ## Execution
 
-1. Parse user intent → title, domain, initiative, priority, assignee, notes, due date
-2. Announce: "Adding to [Tasks DB] — [Initiative]" (or "Adding to Cortex Inbox — untriaged")
-3. Create via `mcp__claude_ai_Notion__notion-create-pages`:
-   - `parent`: `{ type: "data_source_id", data_source_id: "<resolved domain's Tasks data source UUID, no collection:// prefix>" }`
-   - `pages`: `[{ properties: { "Title": "...", "Status": "To Do", "Priority": "P2", "Initiative": "[\"<initiative_page_url>\"]", "Notes": "..." } }]`
-   - For Coresynq: include `"Area": "[\"Billing\"]"` if a fit exists
-   - For Rezzy: include `"Client": "School Name"` if relevant
-   - For Cogent / Personal: no Area, no Client
-   - For Cortex Inbox: omit Initiative entirely (intake state)
-   - Do NOT set Task ID (auto-generated, per-DB prefix)
-4. Confirm: "Created: [Title] (in [Tasks DB] — [Initiative])" or "Created: [Title] (Cortex Inbox — untriaged)"
+1. Parse intent → title, domain, initiative, assignee, notes, due.
+2. From the Brain (§2), get the resolved domain's **Tasks** data-source ID. Resolve the **Initiative** live via `notion-search` scoped to that domain's **Initiatives** ds (initiatives drift — always resolve, never pin):
+   ```
+   mcp__claude_ai_Notion__notion-search({ query: "<initiative name>", data_source_url: "<domain Initiatives collection URL>", filters: {}, page_size: 10, max_highlight_length: 0 })
+   ```
+   Initiative names follow `<Domain> – <Name>` (e.g. `Coresynq – Posting`). Initiative page URL format: `https://www.notion.so/<page_id_no_dashes>`.
+3. Announce the destination.
+4. Create:
+   ```
+   mcp__claude_ai_Notion__notion-create-pages({
+     parent: { type: "data_source_id", data_source_id: "<domain Tasks ds UUID, no collection:// prefix>" },
+     pages: [{ properties: {
+       "Title": "...", "Status": "To Do",
+       "Initiative": "[\"<initiative_page_url>\"]",   // omit entirely for Cortex Inbox
+       "Notes": "...",
+       // Coresynq only: "Area": "[\"Billing\"]"
+       // Rezzy only:    "Client": "Duke"
+     }}]
+   })
+   ```
+5. Confirm where it landed.
 
-## Initiative Discovery
+If no initiative matches in the resolved domain, offer `/luke-domain` to create one.
 
-Resolve an Initiative name to a page URL via `mcp__claude_ai_Notion__notion-search` scoped to the resolved Domain's Initiatives data source — NOT the global cortex one (cortex Initiatives is frozen post-refactor):
+## Adding a new Area option (gated)
 
-```
-mcp__claude_ai_Notion__notion-search({
-  query: "<initiative name or keyword>",
-  data_source_url: "<resolved domain's Initiatives collection URL>",
-  filters: {},
-  page_size: 10,
-  max_highlight_length: 0
-})
-```
+If a Coresynq task fits no existing Area, **do not add it silently** — schema/option changes are auto-mode gated (Brain §5/§6). Tell Collin and let him add it, or run `notion-update-data-source` only on his direct in-session instruction.
 
-Initiative names typically follow `<Domain> – <Name>` (e.g., `Cogent – ClickUp`, `Coresynq – Posting`, `Rezzy External – FSU`). Cache results in-session.
+## Reauth
 
-Initiative page URLs use format: `https://www.notion.so/<page_id_with_dashes_removed>`.
-
-If no matching initiative within the resolved domain, suggest creating one via `/luke-domain` (which also operates per-domain).
-
-## Task ID prefix
-
-Each per-business Tasks DB has its own Task ID auto-increment with prefix: `CGT-` (Cogent), `CSQ-` (Coresynq), `RZY-` (Rezzy), `PER-` (Personal). Cortex Inbox keeps `CTX-` (continued from the pre-refactor cortex Tasks DB). Task ID is auto-generated — do NOT set it.
-
-## Adding New Area Options
-
-If a Coresynq task doesn't fit any existing Area, tell the user and offer to add one via `mcp__claude_ai_Notion__notion-update-data-source` on `collection://fdb7593f-5d8f-4119-8006-da4ed3f5d0d3`. (Cogent / Rezzy / Personal don't have Area fields.)
-
-## Reauth handling
-
-If any `mcp__claude_ai_Notion__*` call returns a 401-style error or "Could not find" permission failure:
-
-1. Tell the user: "Your Notion session expired. Open `/mcp` in Claude Code, find `claude.ai Notion` (or `notion`), and reconnect. Then retry your last action."
-2. Do NOT proceed — wait for the user to confirm reconnection.
-3. After they confirm, retry the original tool call once.
+If a `mcp__claude_ai_Notion__*` call returns 401 / "Could not find": tell the user to reconnect `claude.ai Notion` via `/mcp`, wait, then retry once.

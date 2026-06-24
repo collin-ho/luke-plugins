@@ -10,14 +10,7 @@ Explicitly invoked skill for taxonomy changes. Heavy guardrails — these operat
 
 ## Per-business Initiatives DBs
 
-Post-refactor, initiatives live in 4 per-business DBs — one per teamspace. Teamspace IS the domain; the `Domain` field is gone.
-
-| Domain | Initiatives data source |
-|---|---|
-| Cogent | `collection://9afa9c00-6eda-49c9-b022-f77656adff97` |
-| Coresynq | `collection://2da4502c-9651-4d39-b837-0f5996b32209` |
-| Rezzy | `collection://ef52d445-66b4-4619-bdf1-903ac0f977f0` |
-| Personal | `collection://5189917d-6eb0-4802-88ee-faa36378b085` |
+Initiatives live in 4 per-business DBs — one per teamspace. Teamspace IS the domain; there is no `Domain` field. The Initiatives data-source IDs are in the Notion Brain — read `${CLAUDE_PLUGIN_ROOT}/README.md` §2.
 
 ### Schema (same across all 4)
 
@@ -63,12 +56,11 @@ No local index to refresh — all other skills resolve initiatives live via `not
 Rare. If you ever add a 5th business (e.g., a spin-off), full setup checklist — walk user through, don't auto-execute:
 
 1. **Create new teamspace** in Notion (user does this in the Notion UI).
-2. **Create `<NewDomain> Tasks` DB** in that teamspace using `notion-create-database` with the standard Tasks schema (Title, Task ID with unique prefix, Status, Priority, Due Date, Assignee, Notes, Source Spec, URL, Initiative relation, Legacy Task ID).
+2. **Create `<NewDomain> Tasks` DB** in that teamspace using `notion-create-database` with the standard Tasks schema (Title, Task ID with unique prefix, Status, Due Date, Assignee, Notes, Source Spec, URL, Initiative relation, Legacy Task ID).
 3. **Create `<NewDomain> Initiatives` DB** in the same teamspace with the standard Initiatives schema (above).
 4. **Wire the Initiative relation** in the new Tasks DB to point at the new Initiatives DB.
 5. **Create catch-all initiative** `<NewDomain> – General` in the new Initiatives DB.
-6. **Update `luke-add`, `luke-tasks`, `luke-edit`, `luke-done`, `luke-dump`, this skill, and any team-specific plugin** with the new data source IDs.
-7. **Add the new domain to `luke-add`'s repo→domain inference table** if applicable.
+6. **Add one anchor row to the Notion Brain** (`README.md` §2) with the new domain's Tasks + Initiatives data-source IDs, and a routing line in §4. The CRUD skills read the Brain, so no per-skill edits are needed.
 
 ### Audit
 

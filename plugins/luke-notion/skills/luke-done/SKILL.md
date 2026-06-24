@@ -15,15 +15,9 @@ He finished something. Acknowledge it, keep moving.
 - **Note what's left if relevant** — "That was the last one for today" or "Still got 4 more on that project."
 - **Don't overdo it** — no celebrations. Just confirmation.
 
-## Per-business Tasks DB data sources
+## Anchors
 
-| Domain | Data source |
-|---|---|
-| Cogent | `collection://e71b583f-242f-4b16-9dfa-d9a8d82949b8` |
-| Coresynq | `collection://fdb7593f-5d8f-4119-8006-da4ed3f5d0d3` |
-| Rezzy | `collection://dde1524b-f5da-44a4-8c89-3479f180cc9d` |
-| Personal | `collection://a405e3f1-7196-4e23-afa4-c64f54c08ff7` |
-| Cortex Inbox | `collection://b0d00fd8-eebb-434d-84c1-a652260fbe79` |
+DB-agnostic — finds the task by name/URL and updates whichever DB it lives in. Data-source IDs (for scoping a search when a domain is hinted) are in the Notion Brain — `${CLAUDE_PLUGIN_ROOT}/README.md` §2.
 
 ## Execution
 
@@ -47,11 +41,13 @@ mcp__claude_ai_Notion__notion-search({
 
 ### Step 2: Mark done
 
+⚠️ The done value differs by DB: **Cogent uses `_Done`** (underscore); the others use `Done`. Use the right value for the DB the task lives in (resolve the DB's Status options live if unsure).
+
 ```
 mcp__claude_ai_Notion__notion-update-page({
   page_id: "<page_id>",
   command: "update_properties",
-  properties: { "Status": "Done" },
+  properties: { "Status": "Done" },   // "_Done" if the task is in Cogent
   content_updates: []
 })
 ```

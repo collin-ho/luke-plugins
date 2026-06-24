@@ -1,7 +1,7 @@
 ---
 name: luke-meeting-review
 description: Review a Notion meeting page and produce a curated review draft. ALWAYS use this skill when the user wants to process a meeting, extract tasks from a meeting, or "review" a meeting. Never skip Phase 1 triage. Never silently filter user-candidate tasks.
-allowed-tools: Bash, Read, Write, Edit, mcp__claude_ai_Notion__notion-fetch, mcp__claude_ai_Notion__notion-search, mcp__claude_ai_Notion__notion-create-pages, mcp__claude_ai_Notion__notion-update-data-source, mcp__claude_ai_Notion__notion-update-page, mcp__claude_ai_Notion__notion-get-users, mcp__plugin_luke-notion_luke-notion__dump-data-source, mcp__claude-in-chrome__tabs_context_mcp, mcp__claude-in-chrome__tabs_create_mcp, mcp__claude-in-chrome__navigate, mcp__claude-in-chrome__javascript_tool
+allowed-tools: Bash, Read, Write, Edit, mcp__claude_ai_Notion__notion-fetch, mcp__claude_ai_Notion__notion-search, mcp__claude_ai_Notion__notion-create-pages, mcp__claude_ai_Notion__notion-update-data-source, mcp__claude_ai_Notion__notion-update-page, mcp__claude_ai_Notion__notion-get-users, mcp__claude-in-chrome__tabs_context_mcp, mcp__claude-in-chrome__tabs_create_mcp, mcp__claude-in-chrome__navigate, mcp__claude-in-chrome__javascript_tool
 ---
 
 # Meeting Review Skill
@@ -54,16 +54,14 @@ The user may invoke this skill with:
 
 **If UUID or URL** → normalize to a 32-char hex or dashed UUID inline (strip `https://www.notion.so/...` prefix, extract the ID from the path). Proceed directly to Step 1 with the resolved ID.
 
-**Otherwise**, always start with the null-status dump:
+**Otherwise**, always start with the null-status dump via the `ntn` CLI (paginates natively):
 
-```
-mcp__plugin_luke-notion_luke-notion__dump-data-source({
-  data_source_id: "db2e5ca6-92b7-4e39-ab23-f4c496d2636c",
-  filter: {"property": "Review Status", "select": {"is_empty": true}}
-})
+```bash
+ntn datasources query db2e5ca6-92b7-4e39-ab23-f4c496d2636c \
+  --filter '{"property":"Review Status","select":{"is_empty":true}}' --limit 100 --json
 ```
 
-Returns all null-status rows with their full page properties (Title, Date, Domain, created_time, etc.). This IS the candidate list — no second call needed for the default "review my meetings" case. The bundled dump server is required here because `mcp__claude_ai_Notion__notion-query-database-view` takes a `view_url` and executes a view's pre-configured filters; it does not accept ad-hoc filter arguments.
+Returns all null-status rows with their full page properties (Title, Date, Domain, created_time, etc.). This IS the candidate list — no second call needed for the default "review my meetings" case. Use `ntn` here (not `notion-query-database-view`, which only runs a view's pre-configured filters and takes no ad-hoc filter); page with `--start-cursor` if there are >100.
 
 **If the user provided a named hint** (e.g. "William 1:1", "Karen yesterday", "team vs enterprise"):
 
@@ -101,18 +99,11 @@ Before reviewing the meeting, check for untriaged tasks in the Cortex Inbox (the
 
 Post-refactor, Cortex Inbox holds tasks that didn't get an Initiative at creation time (untriaged intake). "Triage" means **moving** these tasks into their proper per-business Tasks DB and assigning the right Initiative.
 
-Query via the bundled dump server:
+Query via the `ntn` CLI:
 
-```
-mcp__plugin_luke-notion_luke-notion__dump-data-source({
-  data_source_id: "b0d00fd8-eebb-434d-84c1-a652260fbe79",
-  filter: {
-    "or": [
-      {"property": "Status", "select": {"equals": "Backlog"}},
-      {"property": "Status", "select": {"equals": "To Do"}}
-    ]
-  }
-})
+```bash
+ntn datasources query b0d00fd8-eebb-434d-84c1-a652260fbe79 \
+  --filter '{"or":[{"property":"Status","select":{"equals":"Backlog"}},{"property":"Status","select":{"equals":"To Do"}}]}' --limit 100 --json
 ```
 
 (All Cortex Inbox rows are untriaged by definition — they're in the inbox BECAUSE they have no initiative. Filter is just by Status to focus on open ones.)
@@ -159,7 +150,7 @@ mcp__claude_ai_Notion__notion-fetch on the resolved meeting ID
 This provides the full page properties and content needed for triage.
 
 **Local operations** (still required):
-- **Initiative resolution:** scope `notion-search` to the meeting's domain's Initiatives data source (resolved from `frontmatter.triage.domain` or the meeting's `Domain` field). Per-domain data source IDs are in `/luke-add` and `/luke-dump`. Do NOT use the old cortex Initiatives DB (`collection://28a0a1b7-d639-4e34-898f-e19415823dec`) — it's frozen post-refactor and contains pre-migration initiatives only. Cache results in-session.
+- **Initiative resolution:** scope `notion-search` to the meeting's domain's Initiatives data source (resolved from `frontmatter.triage.domain` or the meeting's `Domain` field). Per-domain Initiatives data-source IDs are in the Notion Brain (`${CLAUDE_PLUGIN_ROOT}/README.md` §2). Do NOT use the old cortex Initiatives DB (`28a0a1b7`) — it's frozen/404. Cache results in-session.
 - **Draft check:** look for an existing draft in `~/.claude/luke/drafts/meeting-reviews/` matching this meeting ID (resume vs. new). This is a user-global location — independent of Claude Code's current working directory.
 - **Carry-forward scan:** check for unresolved items from prior reviews of this meeting.
 

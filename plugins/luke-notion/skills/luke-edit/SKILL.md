@@ -15,15 +15,9 @@ Quick updates, confirm what changed.
 - **Show what changed** — list the specific fields modified
 - **Don't over-explain** — he knows what he wanted to change
 
-## Per-business Tasks DB data sources
+## Anchors
 
-| Domain | Data source |
-|---|---|
-| Cogent | `collection://e71b583f-242f-4b16-9dfa-d9a8d82949b8` |
-| Coresynq | `collection://fdb7593f-5d8f-4119-8006-da4ed3f5d0d3` |
-| Rezzy | `collection://dde1524b-f5da-44a4-8c89-3479f180cc9d` |
-| Personal | `collection://a405e3f1-7196-4e23-afa4-c64f54c08ff7` |
-| Cortex Inbox | `collection://b0d00fd8-eebb-434d-84c1-a652260fbe79` |
+DB-agnostic — edits whatever DB the found page lives in. Data-source IDs (for scoping a search when a domain is hinted) are in the Notion Brain — read `${CLAUDE_PLUGIN_ROOT}/README.md` §2.
 
 ## Execution
 
@@ -65,8 +59,7 @@ Updates work the same regardless of which Tasks DB the page lives in.
 | Property | Type | Accepted Values |
 |----------|------|-----------------|
 | Title | title | Any text |
-| Status | select | Backlog, To Do, In Progress, Pending Review, Blocked, Done, Archived |
-| Priority | select | P0, P1, P2, P3 |
+| Status | select | Backlog, To Do, In Progress, Pending Review, Blocked, Done, Archived. ⚠️ Cogent's done value is `_Done`, not `Done`. |
 | Initiative | relation | Search for the initiative page first — scope to the matching domain's Initiatives DB |
 | Due Date | date | Use `"date:Due Date:start": "YYYY-MM-DD"`, `"date:Due Date:is_datetime": 0` |
 | Notes | rich_text | Any text |
@@ -77,6 +70,8 @@ Updates work the same regardless of which Tasks DB the page lives in.
 | Legacy Task ID | rich_text | Read-only intent; rarely edited |
 | userDefined:URL | url | Sometimes appears as "URL" — use `userDefined:URL` in property writes |
 
+**Priority** exists but Collin doesn't use it — don't set it unless he explicitly asks.
+
 **Do NOT** edit: `Domain` (does not exist), `Related Meeting` (does not exist on per-business Tasks DBs — meeting→task relations live on the cortex Meetings side; to link a task to a meeting, open the meeting page and set its Tasks-side relation).
 
 To **clear** a property, set its value to `null`.
@@ -85,9 +80,6 @@ To **clear** a property, set its value to `null`.
 
 **Change status:**
 `properties: { "Status": "In Progress" }`
-
-**Set priority and status together:**
-`properties: { "Priority": "P0", "Status": "In Progress" }`
 
 **Set due date:**
 `properties: { "date:Due Date:start": "2026-04-25", "date:Due Date:is_datetime": 0 }`
