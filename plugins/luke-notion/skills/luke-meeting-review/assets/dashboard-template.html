@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Meeting Review Session — 13 meetings</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  :root {
+    --bg: #0b0d12;
+    --panel: #131722;
+    --panel-2: #1a1f2e;
+    --border: #252b3d;
+    --text: #e5e7eb;
+    --muted: #8b94a8;
+    --accent: #7c9eff;
+    --green: #34d399;
+    --yellow: #fbbf24;
+    --red: #f87171;
+    --pink: #ec4899;
+  }
+  body { background: var(--bg); color: var(--text); font-family: 'SF Mono', ui-monospace, monospace; }
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; }
+  .panel-2 { background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; }
+  .pill { padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+  .pill-green { background: rgba(52,211,153,.15); color: var(--green); }
+  .pill-yellow { background: rgba(251,191,36,.15); color: var(--yellow); }
+  .pill-red { background: rgba(248,113,113,.15); color: var(--red); }
+  .pill-blue { background: rgba(124,158,255,.15); color: var(--accent); }
+  .pill-gray { background: rgba(139,148,168,.15); color: var(--muted); }
+  [contenteditable="true"] { outline: none; border-bottom: 1px dashed transparent; }
+  [contenteditable="true"]:hover { border-bottom: 1px dashed var(--muted); }
+  [contenteditable="true"]:focus { border-bottom: 1px dashed var(--accent); background: rgba(124,158,255,.05); }
+  .task-row { transition: opacity .2s, background .2s; }
+  .task-row.dropped { opacity: .3; text-decoration: line-through; }
+  details summary { cursor: pointer; user-select: none; }
+  details summary::-webkit-details-marker { display: none; }
+  details summary::before { content: '▸'; display: inline-block; margin-right: 6px; transition: transform .15s; color: var(--muted); }
+  details[open] summary::before { transform: rotate(90deg); }
+  .queue-item { transition: background .15s; }
+  .queue-item:hover { background: var(--panel-2); }
+  .queue-item.active { background: rgba(124,158,255,.12); border-left: 3px solid var(--accent); }
+  .queue-item.done { opacity: .55; }
+  .queue-item.done .queue-num { color: var(--green); }
+  .queue-item.skipped .queue-num { color: var(--muted); }
+  .queue-num { font-weight: 700; color: var(--muted); width: 24px; display: inline-block; }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+  .progress-ring { transform: rotate(-90deg); }
+  .btn { padding: 6px 14px; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; transition: all .15s; border: 1px solid transparent; }
+  .btn-primary { background: var(--accent); color: #0b0d12; }
+  .btn-primary:hover { background: #9bb4ff; }
+  .btn-ghost { background: transparent; border: 1px solid var(--border); color: var(--text); }
+  .btn-ghost:hover { background: var(--panel-2); }
+  .btn-danger { background: transparent; border: 1px solid rgba(248,113,113,.4); color: var(--red); }
+  .btn-danger:hover { background: rgba(248,113,113,.1); }
+  .decision-badge { font-size: 10px; padding: 1px 6px; border-radius: 4px; font-weight: 700; letter-spacing: .5px; }
+  .work-bearing { background: rgba(236,72,153,.15); color: var(--pink); }
+  .info-only { background: rgba(139,148,168,.15); color: var(--muted); }
+  .session-note { font-size: 11px; color: var(--muted); }
+  input[type="text"], select, textarea {
+    background: var(--panel-2); border: 1px solid var(--border); border-radius: 6px;
+    padding: 6px 10px; color: var(--text); font-family: inherit; font-size: 13px;
+  }
+  textarea { width: 100%; min-height: 60px; resize: vertical; }
+  input[type="text"]:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); }
+  .header-grad {
+    background: linear-gradient(135deg, rgba(124,158,255,.08), rgba(236,72,153,.04));
+  }
+</style>
+</head>
+<body class="min-h-screen">
+
+<div class="flex">
+  <!-- LEFT: Queue sidebar -->
+  <aside class="w-72 min-h-screen border-r border-[var(--border)] panel-2 p-4 sticky top-0 max-h-screen overflow-y-auto" style="background: var(--panel);">
+    <div class="mb-4">
+      <div class="text-xs text-[var(--muted)] uppercase tracking-wider">Meeting Review Session</div>
+      <div class="text-sm mt-1 flex items-center gap-2">
+        <span id="progress-text">1 of 13</span>
+        <div class="flex-1 h-1.5 bg-[var(--border)] rounded-full overflow-hidden">
+          <div id="progress-bar" class="h-full bg-[var(--accent)]" style="width: 7%"></div>
+        </div>
+      </div>
+    </div>
+
+    <ol id="queue" class="space-y-1 text-xs"></ol>
+
+    <div class="mt-6 p-3 rounded-lg bg-[var(--panel-2)] text-xs">
+      <div class="text-[var(--muted)] mb-1">Legend</div>
+      <div class="flex flex-col gap-1">
+        <div><span class="pill pill-green">🟢</span> high confidence</div>
+        <div><span class="pill pill-yellow">🟡</span> your call</div>
+        <div><span class="pill pill-red">🔴</span> AI conflict</div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="flex-1 p-6 max-w-6xl">
+    <div id="meeting-container"></div>
+  </main>
+
+  <!-- RIGHT: AI raw summary -->
+  <aside class="w-96 min-h-screen border-l border-[var(--border)] p-4 sticky top-0 max-h-screen overflow-y-auto" style="background: var(--panel);">
+    <div class="text-xs text-[var(--muted)] uppercase tracking-wider mb-3">AI Summary (raw, for audit)</div>
+    <div id="ai-raw" class="text-xs space-y-3"></div>
+  </aside>
+</div>
+
+<script>
+  // ============== STATE ==============
+  window.SESSION = {
+    currentIdx: 0,
+    meetings: [
+      {idx:1, id:"35f7a873-fa31-8070-9335-cdb904458348", title:"Bar Review Prep — MFR Single Source of Truth", date:"2026-05-13 15:16", domain:"Cogent", status:"in_progress"},
+      {idx:2, id:"35f7a873-fa31-801f-b4b9-c8f9638fbde6", title:"(pending fetch)", date:"2026-05-13 13:29", status:"pending"},
+      {idx:3, id:"35f7a873-fa31-808c-942d-c808118ce02a", title:"(pending fetch)", date:"2026-05-12 21:10", status:"pending"},
+      {idx:4, id:"35e7a873-fa31-808e-b909-fe257ce1a657", title:"(pending fetch)", date:"2026-05-12 11:32", status:"pending"},
+      {idx:5, id:"35d7a873-fa31-8096-bf51-e9b9a1b080be", title:"(pending fetch)", date:"2026-05-11 18:31", status:"pending"},
+      {idx:6, id:"35d7a873-fa31-8077-90da-d29e6448a10d", title:"(pending fetch)", date:"2026-05-11 17:03", status:"pending"},
+      {idx:7, id:"35d7a873-fa31-805c-b9ee-d9093a8e29bb", title:"(pending fetch)", date:"2026-05-11 15:06", status:"pending"},
+      {idx:8, id:"35d7a873-fa31-802e-bbc6-fa7ecbce8819", title:"(pending fetch)", date:"2026-05-11 13:32", status:"pending"},
+      {idx:9, id:"3597a873-fa31-80a4-b4a1-cf8f59540210", title:"(pending fetch)", date:"2026-05-07 14:16", status:"pending"},
+      {idx:10, id:"3587a873-fa31-8042-a107-dd38a4798dcb", title:"(pending fetch)", date:"2026-05-06 15:32", status:"pending"},
+      {idx:11, id:"3587a873-fa31-80f5-a9a0-d89777711b6a", title:"(pending fetch)", date:"2026-05-06 09:33", status:"pending"},
+      {idx:12, id:"3577a873-fa31-801d-a000-d912a97cd1dc", title:"(pending fetch)", date:"2026-05-05 10:30", status:"pending"},
+      {idx:13, id:"3527a873-fa31-8018-b656-cb81395b0991", title:"Billing System Config & Posting Review", date:"2026-04-30", domain:"Coresynq", status:"pending"},
+    ],
+    edits: {}, // keyed by meeting id; user's edits/decisions
+  };
+
+  // ============== RENDER QUEUE ==============
+  function renderQueue() {
+    const q = document.getElementById('queue');
+    q.innerHTML = window.SESSION.meetings.map(m => `
+      <li class="queue-item rounded px-2 py-1.5 cursor-pointer ${m.status === 'in_progress' ? 'active' : ''} ${m.status === 'done' ? 'done' : ''} ${m.status === 'skipped' ? 'skipped' : ''}"
+          data-idx="${m.idx}">
+        <span class="queue-num">${m.idx}.</span>
+        <span class="text-xs">
+          ${m.status === 'done' ? '✓ ' : m.status === 'skipped' ? '⊘ ' : ''}${m.title.length > 38 ? m.title.slice(0,36)+'…' : m.title}
+        </span>
+        <div class="text-[10px] text-[var(--muted)] ml-7">${m.date}${m.domain ? ' · ' + m.domain : ''}</div>
+      </li>
+    `).join('');
+  }
+
+  function updateProgress() {
+    const done = window.SESSION.meetings.filter(m => m.status === 'done' || m.status === 'skipped').length;
+    const pct = (done / window.SESSION.meetings.length) * 100;
+    document.getElementById('progress-bar').style.width = pct + '%';
+    document.getElementById('progress-text').textContent = `${done} of ${window.SESSION.meetings.length}`;
+  }
+
+  // ============== MEETING 1 DATA ==============
+  window.MEETING_1 = {
+    triage: {
+      title: "Bar Review Prep — MFR Single Source of Truth Decision",
+      summary: "Collin + Liam pull Tim and Caitlin in to lock the position before tomorrow's Rob meeting: baseline & target financial data lives in the MFR (not ClickUp, not CAPS). PATs own baseline data entry at project start. Short-term band-aid → long-term: digitize ROI tool and unify Schedule ROI + MFR + budgets.",
+      date: "2026-05-13",
+      type: "team-planning",
+      complexity: "technical",
+      duration: "medium",
+      attendees_primary: ["Collin", "Liam", "Tim", "Caitlin"],
+      attendees_mentioned: ["Rob", "Caleb", "Ryan", "Dakota", "Merlin"],
+      domain: "Cogent",
+      initiative_primary: "Cogent – ClickUp",
+      initiative_secondary: null,
+    },
+    sections: [
+      {
+        title: "The MFR Decision (baseline data lives there)",
+        decisions: [
+          {text: "Baseline & target financial data will live in the MFR, not ClickUp, not CAPS. Unanimous (Collin, Liam, Tim, Caitlin).", work_bearing: true},
+          {text: "MFR + Schedule ROI = single source of truth going forward.", work_bearing: true},
+          {text: "CAPS to eventually be eliminated (long-term).", work_bearing: false},
+        ],
+        context: [
+          "Previously baseline data was in ClickUp; Caleb directed it be ripped out. Tim built CAPS as the interim home. Inconsistent adoption.",
+          "Tim: \"I can add to the MFR in 20 minutes\" — 4 fields (baseline P&L items), then auto-calculate the rest from rolling-12 data.",
+          "Caitlin clarified the recurring \"MFR is broken\" complaints are data integrity issues (incomplete client financials, ~85% of clients don't have accurate data first week), not tool functionality.",
+        ],
+      },
+      {
+        title: "How It Works + Who Owns It",
+        decisions: [
+          {text: "PATs own baseline data entry at project setup (starting next week, when PATs are taking over ROI support).", work_bearing: true},
+          {text: "Process: PAT inputs project start date → MFR auto-pulls rolling-12 baseline (revenue, COGS, gross profit/margin, net profit, cash conversion cycle, quick ratio).", work_bearing: true},
+          {text: "Targets come from PD-built budgets in Schedule ROI.", work_bearing: false},
+          {text: "Tim can backfill all existing projects once start dates are provided.", work_bearing: true},
+        ],
+        context: [
+          "Caitlin's pushback: this is another PD responsibility shifting to PAT because PDs aren't reliable. She's not blocking, just naming it.",
+          "Long-term: Schedule ROI + budgets + MFR collapse into one unified digitized tool. Collin already owns \"digitize the tools\" as an initiative.",
+          "Caitlin's bigger vision: ROI tool connected to client profile in MFR → kills CAPS entirely.",
+          "\"Putting it back in ClickUp\" was floated as a 2-week band-aid (while Caleb's away). Rejected — Caleb explicitly wanted it out.",
+        ],
+      },
+      {
+        title: "Tomorrow's Rob Meeting + Bar Status",
+        decisions: [
+          {text: "United front to Rob: Collin, Tim, Liam all aligned. Tim meets Rob first (morning), Collin meets in afternoon.", work_bearing: false},
+          {text: "Rob only expects to see layout/design tomorrow, not working data-pulling. Bandaid is fine.", work_bearing: false},
+          {text: "Liam to add labels on the printout: \"PAT MFR input\" on ROI section, \"in ClickUp / training gap\" on touchpoint section.", work_bearing: true},
+          {text: "Position statement (3-4 sentences) needed: why baseline data isn't populated + how it'll be fixed. Liam owns drafting it.", work_bearing: true},
+        ],
+        context: [
+          "Bar will be condensed from ~10-12 pages → 1 page (client services only).",
+          "Lifecycle KPIs deduped in ClickUp (removed duplicate section).",
+          "After Rob's approval: build functionality in Excel first, then move to Tableau. Recurring ClickUp data via CSV exports (~1 hour to wire up per Collin).",
+          "Need to ask Rob tomorrow: anticipated timeline for full bar build-out (Tuesday meetings vs. when Caleb's back).",
+          "Collin to review final bar with Dakota for approval before printing.",
+        ],
+      },
+    ],
+    tasks: [
+      {keep_status: "green", title: "Draft 3-4 sentence position statement for Rob: why baseline data isn't in V2 + how it'll be fixed via MFR", initiative: "Cogent – ClickUp", priority: "P1", status: "To Do", due: "2026-05-14", assignee: "Liam", source: "transcript-quote", notes: "Liam owns drafting; Collin assists on the answer content. Needed before Rob's afternoon meeting tomorrow."},
+      {keep_status: "green", title: "Add 'PAT MFR input' label to ROI section + 'in ClickUp / training gap' label to touchpoint section on bar printout", initiative: "Cogent – ClickUp", priority: "P1", status: "To Do", due: "2026-05-14", assignee: "Liam", source: "transcript-quote", notes: "For Rob's printout tomorrow."},
+      {keep_status: "green", title: "Review updated bar data with Dakota for sign-off before Rob meeting", initiative: "Cogent – ClickUp", priority: "P1", status: "To Do", due: "2026-05-14", assignee: "Collin", source: "transcript-quote", notes: "Dakota missed today's meeting; need his approval that everything he wanted covered is in there."},
+      {keep_status: "green", title: "Send recap summary to team (Liam, Tim, Caitlin) on MFR-baseline position", initiative: "Cogent – ClickUp", priority: "P2", status: "To Do", due: "2026-05-13", assignee: "Collin", source: "transcript-quote", notes: "Per Collin's commitment at end of meeting: \"I'll send that recap.\""},
+      {keep_status: "green", title: "Present updated bar layout to Rob (afternoon meeting)", initiative: "Cogent – ClickUp", priority: "P1", status: "To Do", due: "2026-05-14", assignee: "Collin", source: "transcript-quote", notes: "Rob only expects to see layout/design tomorrow, not working data-pulling functionality. Ask anticipated timeline for full build-out."},
+      {keep_status: "green", title: "Schedule 2-hour block with Liam next week to build out bar functionality", initiative: "Cogent – ClickUp", priority: "P2", status: "To Do", due: "2026-05-20", assignee: "Collin", source: "transcript-quote", notes: "Liam suggested 2 hours on the schedule; first build in Excel before Tableau. CSV exports from ClickUp on recurring basis (~1hr wire-up)."},
+      {keep_status: "yellow", title: "Add baseline data fields to MFR (4 P&L inputs) + wire to bar", initiative: "Cogent – ClickUp", priority: "P1", status: "To Do", due: "2026-05-20", assignee: "Tim", source: "transcript-quote", notes: "Tim: \"I can add to the MFR in 20 minutes.\" Pending Rob's approval. Then backfill all existing projects once start dates provided."},
+      {keep_status: "yellow", title: "Define PAT week-one process: input project start date in MFR + populate baseline numbers", initiative: "Cogent – ClickUp", priority: "P2", status: "Backlog", assignee: "Caitlin", source: "transcript-quote", notes: "PATs taking over ROI support next week. Caitlin to plan attack for backfill of existing client backlog."},
+    ],
+    ai_summary_raw: `### Action Items
+- Collin to present updated bar to Rob tomorrow afternoon
+- Tim to meet with Rob before Collin's meeting
+- Liam to write 3-4 sentence position statement explaining why baseline data isn't populated and how it will be fixed
+- Liam to add "PAT MFR input" label to return on investment section in the bar
+- Liam to add label noting touchpoint section is in ClickUp (training gap)
+- Collin to review updated bar data with Dakota for approval
+- Collin to send summary recap to team (Liam, Tim, Caitlin) after meeting
+- Team to ask Rob about anticipated timeline for bar completion during tomorrow's meeting
+- Liam and Collin to schedule 2 hours next week to work on building out bar functionality
+
+### Key Decision: Baseline Data Will Live in MFR
+- Team decided baseline and target financial data will be stored in the MFR (Monthly Financial Report), not in ClickUp or CAPS
+- Rob only expects to see layout/design tomorrow, not working data-pulling functionality
+- MFR will serve as single source of truth along with Schedule ROI
+- Unanimously supported by Collin, Liam, Tim, and Caitlin
+
+### MFR Integration for Baseline Metrics
+- Baseline metrics: revenue, COGS, gross profit, gross margin, net profit, cash conversion cycle, quick ratio
+- PATs responsible for entering baseline data when setting up new projects
+- Process: PAT inputs project start date, MFR auto-calculates rolling-12 baseline
+- Targets come from PD-built budgets in Schedule ROI
+- Tim can backfill existing projects once start dates provided
+
+### Data Integrity Discussion
+- Caitlin: MFR accuracy issues are data integrity (not tool functionality)
+- ~85% of clients don't have accurate financials in first week
+- MFR designed to highlight gaps and walk clients through issues
+- Data integrity is a problem regardless of where data lives
+
+### Short-term vs Long-term
+- Short-term: PATs manually enter baseline data in MFR as part of week-one setup
+- Long-term: digitize ROI tool, integrate with MFR, eliminate CAPS, unified Schedule ROI + MFR + budgets
+
+### PAT Responsibilities
+- Caitlin: concern about PD responsibilities shifting to PAT team
+- Team acknowledged PATs more reliable than PDs for data entry
+- Process will show which PDs aren't completing ROI
+
+### Bar Status
+- Bar currently ~10-12 pages → condensed to 1 page (client services)
+- Multiple sheets lack data pulling (focusing on client services first)
+- Lifecycle touchpoints + KPIs addressed in ClickUp; duplicate KPI sections removed
+- Liam: working through backfill, everything built and set up
+
+### Next Steps After Rob's Approval
+- Build functionality in Excel before moving to Tableau
+- Pull recurring data from ClickUp via CSV exports (~1hr)
+- Timeline depends on Rob's expectations for Tuesday meetings`,
+  };
+
+  // ============== RENDER MEETING ==============
+  function renderMeeting(m) {
+    const c = document.getElementById('meeting-container');
+    const t = m.triage;
+
+    c.innerHTML = `
+      <!-- HEADER -->
+      <div class="panel header-grad p-6 mb-4">
+        <div class="flex items-start justify-between gap-4 mb-3">
+          <div class="flex-1">
+            <div class="text-xs text-[var(--muted)] mb-1">MEETING 1 / 13 · ${t.date} · <a href="https://www.notion.so/${m.notion_id || '35f7a873fa3180709335cdb904458348'}" target="_blank" class="text-[var(--accent)] hover:underline">open in Notion ↗</a></div>
+            <h1 class="text-xl font-bold" contenteditable="true" data-field="triage.title">${t.title}</h1>
+          </div>
+          <div class="flex gap-2">
+            <span class="pill pill-blue">${t.type}</span>
+            <span class="pill pill-gray">${t.complexity}</span>
+          </div>
+        </div>
+        <div class="text-sm text-[var(--muted)] leading-relaxed italic border-l-2 border-[var(--border)] pl-3" contenteditable="true" data-field="triage.summary">${t.summary}</div>
+      </div>
+
+      <!-- TRIAGE TABLE -->
+      <details open class="panel mb-4">
+        <summary class="p-4 font-semibold text-sm">Phase 1 — Triage</summary>
+        <div class="p-4 pt-0 grid grid-cols-2 gap-3 text-sm">
+          <div><div class="text-xs text-[var(--muted)]">Domain</div><div class="mt-0.5"><span class="pill pill-green">🟢 ${t.domain}</span></div></div>
+          <div><div class="text-xs text-[var(--muted)]">Initiative (primary)</div><div class="mt-0.5"><span class="pill pill-green">🟢 ${t.initiative_primary}</span></div></div>
+          <div><div class="text-xs text-[var(--muted)]">Type / Complexity</div><div class="mt-0.5">${t.type} · ${t.complexity} · ${t.duration}</div></div>
+          <div><div class="text-xs text-[var(--muted)]">Initiative (secondary)</div><div class="mt-0.5 text-[var(--muted)]">${t.initiative_secondary || '—'}</div></div>
+          <div class="col-span-2"><div class="text-xs text-[var(--muted)]">Primary attendees</div><div class="mt-0.5 flex gap-1 flex-wrap">${t.attendees_primary.map(a => `<span class="pill pill-blue">${a}</span>`).join('')}</div></div>
+          <div class="col-span-2"><div class="text-xs text-[var(--muted)]">Mentioned</div><div class="mt-0.5 flex gap-1 flex-wrap">${t.attendees_mentioned.map(a => `<span class="pill pill-gray">${a}</span>`).join('')}</div></div>
+        </div>
+      </details>
+
+      <!-- SECTIONS -->
+      ${m.sections.map((s, sIdx) => `
+        <details open class="panel mb-4">
+          <summary class="p-4 font-semibold text-sm">§ ${sIdx + 1} · ${s.title}</summary>
+          <div class="p-4 pt-0">
+            <div class="text-xs text-[var(--muted)] uppercase tracking-wider mb-2 mt-2">Decisions</div>
+            <ul class="space-y-1.5 mb-4">
+              ${s.decisions.map((d, dIdx) => `
+                <li class="flex items-start gap-2 text-sm leading-relaxed">
+                  <span class="decision-badge ${d.work_bearing ? 'work-bearing' : 'info-only'} mt-0.5 cursor-pointer" onclick="toggleWorkBearing(${sIdx}, ${dIdx})">${d.work_bearing ? 'WORK' : 'INFO'}</span>
+                  <span contenteditable="true" data-section="${sIdx}" data-decision="${dIdx}">${d.text}</span>
+                </li>
+              `).join('')}
+            </ul>
+            <div class="text-xs text-[var(--muted)] uppercase tracking-wider mb-2">Key Context</div>
+            <ul class="space-y-1.5">
+              ${s.context.map((ctx, cIdx) => `
+                <li class="text-sm leading-relaxed text-[var(--muted)]" contenteditable="true" data-section="${sIdx}" data-context="${cIdx}">— ${ctx}</li>
+              `).join('')}
+            </ul>
+          </div>
+        </details>
+      `).join('')}
+
+      <!-- TASKS -->
+      <details open class="panel mb-4">
+        <summary class="p-4 font-semibold text-sm">Phase 2.5 — Task Sweep (${m.tasks.length} candidates)</summary>
+        <div class="p-4 pt-0 space-y-2">
+          ${m.tasks.map((t, tIdx) => `
+            <div class="task-row panel-2 p-3" id="task-${tIdx}">
+              <div class="flex items-start gap-3">
+                <input type="checkbox" checked class="mt-1.5" onchange="toggleTask(${tIdx}, this.checked)">
+                <div class="flex-1">
+                  <div class="flex items-center gap-2 mb-1">
+                    <span class="pill ${t.keep_status === 'green' ? 'pill-green' : t.keep_status === 'yellow' ? 'pill-yellow' : 'pill-red'}">${t.keep_status === 'green' ? '🟢 keep' : t.keep_status === 'yellow' ? '🟡 discuss' : '🔴 maybe drop'}</span>
+                    <span class="pill pill-gray">${t.priority}</span>
+                    <span class="pill pill-gray">${t.status}</span>
+                    ${t.due ? `<span class="pill pill-gray">due ${t.due}</span>` : ''}
+                    <span class="pill pill-blue">${t.assignee}</span>
+                  </div>
+                  <div class="text-sm font-medium mb-1" contenteditable="true" data-task="${tIdx}" data-tfield="title">${t.title}</div>
+                  <div class="text-xs text-[var(--muted)] mb-1">↳ ${t.initiative}</div>
+                  <div class="text-xs text-[var(--muted)] italic" contenteditable="true" data-task="${tIdx}" data-tfield="notes">${t.notes}</div>
+                </div>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+        <div class="px-4 pb-4">
+          <button class="btn btn-ghost" onclick="addTask()">+ Add task I missed</button>
+        </div>
+      </details>
+
+      <!-- ACTIONS -->
+      <div class="panel p-4 mb-8 sticky bottom-4 flex items-center justify-between" style="background: rgba(11,13,18,.95); backdrop-filter: blur(8px);">
+        <div class="text-xs text-[var(--muted)]">
+          <span id="state-summary">${m.tasks.length} tasks staged · ready to commit when you click "approve"</span>
+        </div>
+        <div class="flex gap-2">
+          <button class="btn btn-danger" onclick="markSkipped()">Skip meeting</button>
+          <button class="btn btn-ghost" onclick="window.__USER_NOTE = prompt('Add a note for Claude:'); window.__STATE = 'note'">Send note to Claude</button>
+          <button class="btn btn-primary" onclick="approveMeeting()">✓ Approve & continue to next</button>
+        </div>
+      </div>
+    `;
+
+    // Right pane: raw AI summary
+    document.getElementById('ai-raw').innerHTML = m.ai_summary_raw
+      .split('\n')
+      .map(line => {
+        if (line.startsWith('### ')) return `<div class="font-semibold text-[var(--accent)] mt-3">${line.slice(4)}</div>`;
+        if (line.startsWith('- ')) return `<div class="ml-2 text-[var(--muted)]">${line}</div>`;
+        return line ? `<div class="text-[var(--muted)]">${line}</div>` : '';
+      })
+      .join('');
+  }
+
+  // ============== INTERACTIONS ==============
+  window.toggleWorkBearing = (sIdx, dIdx) => {
+    const d = window.MEETING_1.sections[sIdx].decisions[dIdx];
+    d.work_bearing = !d.work_bearing;
+    renderMeeting(window.MEETING_1);
+  };
+
+  window.toggleTask = (tIdx, checked) => {
+    document.getElementById('task-' + tIdx).classList.toggle('dropped', !checked);
+    window.MEETING_1.tasks[tIdx].dropped = !checked;
+    const kept = window.MEETING_1.tasks.filter(t => !t.dropped).length;
+    document.getElementById('state-summary').textContent = `${kept} tasks staged · ready to commit when you click "approve"`;
+  };
+
+  window.addTask = () => {
+    const title = prompt("Task title?");
+    if (!title) return;
+    window.MEETING_1.tasks.push({
+      keep_status: "green", title, initiative: window.MEETING_1.triage.initiative_primary,
+      priority: "P2", status: "To Do", assignee: "Collin", source: "review-conversation",
+      notes: "Added during review.",
+    });
+    renderMeeting(window.MEETING_1);
+  };
+
+  window.markSkipped = () => {
+    window.__STATE = 'skipped';
+    window.__SKIP_TITLE = window.MEETING_1.triage.title;
+    document.getElementById('state-summary').innerHTML = '<span class="text-[var(--red)]">⊘ skip flag set — Claude will pick this up on next poll</span>';
+  };
+
+  window.approveMeeting = () => {
+    // Capture all edits from contenteditable
+    document.querySelectorAll('[contenteditable="true"]').forEach(el => {
+      const field = el.dataset.field;
+      if (field === 'triage.title') window.MEETING_1.triage.title = el.textContent.trim();
+      if (field === 'triage.summary') window.MEETING_1.triage.summary = el.textContent.trim();
+      if (el.dataset.section !== undefined && el.dataset.decision !== undefined) {
+        window.MEETING_1.sections[el.dataset.section].decisions[el.dataset.decision].text = el.textContent.trim();
+      }
+      if (el.dataset.section !== undefined && el.dataset.context !== undefined) {
+        window.MEETING_1.sections[el.dataset.section].context[el.dataset.context] = el.textContent.trim().replace(/^—\s*/, '');
+      }
+      if (el.dataset.task !== undefined) {
+        const tIdx = +el.dataset.task;
+        if (el.dataset.tfield === 'title') window.MEETING_1.tasks[tIdx].title = el.textContent.trim();
+        if (el.dataset.tfield === 'notes') window.MEETING_1.tasks[tIdx].notes = el.textContent.trim();
+      }
+    });
+    window.__STATE = 'approved';
+    window.__APPROVED_PAYLOAD = JSON.parse(JSON.stringify(window.MEETING_1));
+    document.getElementById('state-summary').innerHTML = '<span class="text-[var(--green)]">✓ approved — Claude will write draft + commit on next poll</span>';
+  };
+
+  // ============== PERSISTENCE ==============
+  const LS_KEY = 'meeting_review_session_efe3620c';
+  function saveState() {
+    try {
+      localStorage.setItem(LS_KEY, JSON.stringify({
+        MEETING_1: window.MEETING_1,
+        SESSION: window.SESSION,
+        __STATE: window.__STATE || null,
+        __USER_NOTE: window.__USER_NOTE || null,
+        __APPROVED_PAYLOAD: window.__APPROVED_PAYLOAD || null,
+        savedAt: new Date().toISOString(),
+      }));
+    } catch (e) { console.error('save failed', e); }
+  }
+  function loadState() {
+    try {
+      const raw = localStorage.getItem(LS_KEY);
+      if (!raw) return false;
+      const s = JSON.parse(raw);
+      if (s.MEETING_1) window.MEETING_1 = s.MEETING_1;
+      if (s.SESSION) window.SESSION = s.SESSION;
+      if (s.__STATE) window.__STATE = s.__STATE;
+      if (s.__USER_NOTE) window.__USER_NOTE = s.__USER_NOTE;
+      if (s.__APPROVED_PAYLOAD) window.__APPROVED_PAYLOAD = s.__APPROVED_PAYLOAD;
+      return true;
+    } catch (e) { return false; }
+  }
+  // Auto-save on any change
+  document.addEventListener('click', () => setTimeout(saveState, 100));
+  document.addEventListener('input', () => setTimeout(saveState, 200));
+  setInterval(saveState, 5000); // safety net
+
+  // ============== INIT ==============
+  loadState();
+  renderQueue();
+  updateProgress();
+  renderMeeting(window.MEETING_1);
+
+  // hook queue clicks (just visual for now)
+  document.getElementById('queue').addEventListener('click', e => {
+    const li = e.target.closest('.queue-item');
+    if (!li) return;
+    window.__JUMP_TO = +li.dataset.idx;
+  });
+</script>
+</body>
+</html>

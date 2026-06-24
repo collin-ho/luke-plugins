@@ -1,7 +1,7 @@
 ---
 name: luke-meeting-review
 description: Review a Notion meeting page and produce a curated review draft. ALWAYS use this skill when the user wants to process a meeting, extract tasks from a meeting, or "review" a meeting. Never skip Phase 1 triage. Never silently filter user-candidate tasks.
-allowed-tools: Bash, Read, Write, Edit, mcp__claude_ai_Notion__notion-fetch, mcp__claude_ai_Notion__notion-search, mcp__claude_ai_Notion__notion-create-pages, mcp__claude_ai_Notion__notion-update-data-source, mcp__claude_ai_Notion__notion-update-page, mcp__claude_ai_Notion__notion-get-users, mcp__plugin_luke-notion_luke-notion__dump-data-source
+allowed-tools: Bash, Read, Write, Edit, mcp__claude_ai_Notion__notion-fetch, mcp__claude_ai_Notion__notion-search, mcp__claude_ai_Notion__notion-create-pages, mcp__claude_ai_Notion__notion-update-data-source, mcp__claude_ai_Notion__notion-update-page, mcp__claude_ai_Notion__notion-get-users, mcp__plugin_luke-notion_luke-notion__dump-data-source, mcp__claude-in-chrome__tabs_context_mcp, mcp__claude-in-chrome__tabs_create_mcp, mcp__claude-in-chrome__navigate, mcp__claude-in-chrome__javascript_tool
 ---
 
 # Meeting Review Skill
@@ -130,6 +130,23 @@ For each item the user assigns a Domain + Initiative:
 2. **Archive the Cortex Inbox row** via `mcp__claude_ai_Notion__notion-update-page` with `properties: {"Status": "Archived"}` and content_updates: `[{op: "trash"}]` (or set `Status: Archived` for soft-archive without trashing).
 
 If no untriaged items exist, skip silently and proceed to Step 1.
+
+### Step 0.7: Mode selection — Browser Dashboard vs. Chat
+
+**Default mode is the Browser Dashboard** when the candidate list contains 3 or more meetings (a "batched review"). Single-meeting reviews may still run in chat for speed.
+
+The browser dashboard exists because Phase 1 → Phase 2 → Phase 2.5 chat walkthroughs are slow to read and harder to correct — Collin called it "so much better than text" the first time we built one (2026-05-13 session) and asked that it become the default.
+
+**Decision rules:**
+
+| Situation | Mode |
+|---|---|
+| Batch of ≥3 unreviewed meetings | **Browser** (default) |
+| User says "do this in chat" / "walk me through" / single ad-hoc meeting | Chat |
+| Browser MCP unavailable (no `mcp__claude-in-chrome__*` tools loaded) | Chat (announce the fallback) |
+| User says "use the dashboard" / "browser" / "the way we did last time" | **Browser** |
+
+Once chosen, proceed to the corresponding branch. **Browser mode replaces Steps 5–10** with the flow in the `## Browser Dashboard Mode` section at the bottom of this skill. Steps 1–4 (bootstrap, carry-forward, fetch content, empty-meeting check) still run for each meeting before the dashboard renders.
 
 ### Step 1: Bootstrap context
 
@@ -456,3 +473,96 @@ The AI-generated summary gets details wrong (observed: wrong structural claims l
 
 - Committing the draft to Notion: `/luke-meeting-commit`
 - Managing initiatives: `/luke-domain`
+
+---
+
+## Browser Dashboard Mode
+
+The default flow for batched (3+) reviews. Replaces Steps 5–10 with an interactive HTML dashboard the user drives in Chrome while the agent polls for state and writes drafts as each meeting is approved.
+
+The reference HTML template lives next to this skill at `assets/dashboard-template.html`. Read it, inject the meeting-specific data, and write the rendered output to `$CLAUDE_JOB_DIR/review.html` (or `~/.claude/luke/drafts/meeting-reviews/dashboard-<session>.html` if `$CLAUDE_JOB_DIR` is unset).
+
+### B-0. Tab discovery & spawn — CRITICAL
+
+The MCP can only see and script tabs that live in **its tab group**. If the user opens the file in a separate Chrome window, you cannot read or write its state.
+
+**Always spawn the tab yourself via `mcp__claude-in-chrome__tabs_create_mcp`**, then `mcp__claude-in-chrome__navigate` to the `file://` URL. Confirm the URL on the returned tab is the dashboard, not `chrome-error://`. Common gotcha: the navigate tool may report `https://file:///...` even though it loaded — verify by calling `javascript_tool` to read `location.href` and `typeof window.SESSION` after navigation. If `window.SESSION === 'undefined'`, the page did not load.
+
+Never instruct the user to "open the file" themselves. Send them the tab and tell them where to look.
+
+### B-1. Build session payload
+
+For each candidate meeting in the batch, run Steps 1–4 (bootstrap, carry-forward, fetch full content, empty-meeting handling). For non-skipped meetings, pre-compute a payload object:
+
+```
+{
+  idx, id, notion_url,
+  triage: { title, summary, date, type, complexity, duration, attendees_primary, attendees_mentioned, domain, initiative_primary, initiative_secondary },
+  sections: [{ title, decisions: [{ text, work_bearing }], context: [string] }],
+  tasks: [{ keep_status: 'green'|'yellow'|'red', title, initiative, priority, status, due, assignee, source, notes }],
+  ai_summary_raw: string
+}
+```
+
+Inject all N payloads into the dashboard at build time. Lazy-load is fine for very large batches but eager is simpler — render all and let the user move via the queue sidebar.
+
+### B-2. Render dashboard
+
+Layout (left → main → right):
+
+- **Left queue sidebar:** numbered list of all meetings, progress bar (done / total), active highlight on current, ✓ on done, ⊘ on skipped. Click = jump to that meeting.
+- **Main column:** sticky header (editable title + summary), Phase-1 triage card (collapsible), per-section cards (decisions with click-to-toggle WORK/INFO badges + key context, all `contenteditable`), task sweep (checkbox-to-keep, editable title/notes, + Add Task button), sticky bottom action bar (Skip · Send Note · ✓ Approve & Continue).
+- **Right pane:** raw AI summary for cross-reference / audit.
+
+Style: dark theme, monospace, Tailwind via CDN, color-coded confidence pills (🟢 / 🟡 / 🔴).
+
+### B-3. Persistence (mandatory)
+
+The dashboard MUST persist all user edits to `localStorage` under key `meeting_review_session_<job_or_session_id>` and rehydrate on load. Auto-save on every click and input event, plus a 5-second safety-net interval. Without this, a refresh wipes the user's work and they will be (justifiably) furious.
+
+### B-4. State signals the agent polls
+
+The dashboard exposes these globals; the agent reads them via `javascript_tool`:
+
+| Global | Set by | Meaning |
+|---|---|---|
+| `window.__STATE` | Approve / Skip / Note buttons | `'approved'`, `'skipped'`, `'note'`, or unset |
+| `window.__APPROVED_PAYLOAD` | Approve button | Captured payload with all edits applied |
+| `window.__SKIP_TITLE` | Skip button | Title to write back to Notion (for `Skipped` status) |
+| `window.__USER_NOTE` | Send Note button | Free-text message from user |
+| `window.__JUMP_TO` | Queue sidebar click | Meeting idx the user wants to navigate to |
+| `window.SESSION.meetings[i].status` | Auto on approve/skip | `'pending'`, `'in_progress'`, `'done'`, `'skipped'` |
+
+### B-5. Polling loop
+
+After every user-driven action (or every 30–60s when idle, per the harness's notification model), poll:
+
+```
+javascript_tool({
+  tabId: <dashboard tab>,
+  text: `JSON.stringify({
+    state: window.__STATE,
+    payload: window.__APPROVED_PAYLOAD,
+    note: window.__USER_NOTE,
+    skipTitle: window.__SKIP_TITLE,
+    jumpTo: window.__JUMP_TO,
+    currentIdx: window.SESSION?.currentIdx,
+  })`
+})
+```
+
+On `'approved'`: capture payload → write draft markdown to `~/.claude/luke/drafts/meeting-reviews/<meeting_id>.md` (same format as Step 9) → flip `ready_for_commit: true` → invoke `/luke-meeting-commit` → reset `window.__STATE = null` and `window.__APPROVED_PAYLOAD = null` via `javascript_tool` → advance dashboard to next meeting via `window.SESSION.currentIdx++`.
+
+On `'skipped'`: do the inline-skip write to Notion (Step 4 logic with `Skipped` status + title rename) → reset state.
+
+On `'note'`: read the note in chat, respond, clear `window.__USER_NOTE`.
+
+### B-6. Fallback / failure modes
+
+- **Tab gets a `chrome-error://` URL:** the file:// navigate failed. Re-spawn a tab and re-navigate; if it fails twice, fall back to chat mode and tell the user why.
+- **User opens the file in a non-MCP-group tab:** you cannot see it. Politely explain and re-spawn in the MCP group, restoring state from `localStorage` if the user already worked in it on the same machine (same localStorage key).
+- **Browser MCP not loaded:** announce the fallback to chat mode and proceed with Steps 5–10 instead.
+
+### B-7. Saving feedback / history
+
+After the batch finishes, if anything noteworthy emerged about how the dashboard behaved (perf, layout regressions, missing affordances), capture it as a `feedback_browser-review-ui` memory update so subsequent sessions improve.
