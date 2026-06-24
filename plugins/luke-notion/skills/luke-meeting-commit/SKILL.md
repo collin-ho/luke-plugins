@@ -50,7 +50,6 @@ Tasks live under `## Tasks (curated — 🟢 keep)`. Each task block starts with
 | Field | Required | Default | Notes |
 |---|---|---|---|
 | `initiative` | yes | — | Full name with domain prefix, e.g. `Cogent – ClickUp`. Drives both target Tasks DB and Initiative relation. |
-| `priority` | no | `P2` | P0 / P1 / P2 / P3 |
 | `status` | no | `To Do` | Backlog / To Do / In Progress / Pending Review / Blocked / Done / Archived |
 | `due` | no | — | `YYYY-MM-DD` |
 | `assignee` | no | — | Notion user ID |
@@ -73,7 +72,7 @@ Bucket tasks into per-domain groups. Each group will be one `notion-create-pages
 ### Step 5: Dry-run preview
 
 Show the user:
-- Each task with its target DB (e.g., "Coresynq Tasks"), Initiative, Status, Priority, Due.
+- Each task with its target DB (e.g., "Coresynq Tasks"), Initiative, Status, Due.
 - Meeting property updates (Title, Domain, Initiative relation if mentioned, Summary, Date, Review Status → Reviewed).
 - Per-domain Tasks-relation updates that will be written on the meeting page after creation.
 - Ask: "Push to Notion? (y/n)"
@@ -111,7 +110,6 @@ mcp__claude_ai_Notion__notion-create-pages({
         "Title": "<task title>",
         "Initiative": "[\"https://www.notion.so/<initiative_id_no_dashes>\"]",
         "Status": "<status>",
-        "Priority": "<priority>",
         "Notes": "<notes>",
         // optional:
         "date:Due Date:start": "<due>",

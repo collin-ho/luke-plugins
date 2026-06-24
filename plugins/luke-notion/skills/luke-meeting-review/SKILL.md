@@ -117,7 +117,7 @@ When the query returns results, present them immediately as a numbered list. Do 
 
 For each item the user assigns a Domain + Initiative:
 
-1. **Create a new task** in the matching domain's Tasks DB (Cogent / Coresynq / Rezzy / Personal — data-source IDs in the Notion Brain, `${CLAUDE_PLUGIN_ROOT}/README.md` §2). Copy over Title, Status, Priority, Due Date, Notes, Source Spec, Assignee, Legacy Task ID. Set Initiative to the resolved page URL.
+1. **Create a new task** in the matching domain's Tasks DB (Cogent / Coresynq / Rezzy / Personal — data-source IDs in the Notion Brain, `${CLAUDE_PLUGIN_ROOT}/README.md` §2). Copy over Title, Status, Due Date, Notes, Source Spec, Assignee, Legacy Task ID. Set Initiative to the resolved page URL.
 2. **Archive the Cortex Inbox row** via `mcp__claude_ai_Notion__notion-update-page` with `properties: {"Status": "Archived"}` and content_updates: `[{op: "trash"}]` (or set `Status: Archived` for soft-archive without trashing).
 
 If no untriaged items exist, skip silently and proceed to Step 1.
@@ -395,7 +395,6 @@ Body structure:
 ```
 ### 1. Task Title Here
 - initiative: Cogent – ClickUp
-- priority: P1
 - status: To Do
 - due: 2026-04-25
 - assignee: 1b1d872b-594c-81d5-8ae2-00027cffc129
@@ -409,7 +408,7 @@ Body structure:
 
 Rules:
 - Plain `- key: value` only. No bold markdown (not `- **key:** value`).
-- `initiative` is required. `priority`, `status`, and `notes` should always be set on a review-sourced task (the commit parser defaults to `P2` / `To Do` / empty, but meeting drafts should never rely on defaults). All other fields are optional — omit the line entirely if no value (do NOT write empty strings).
+- `initiative` is required. `status` and `notes` should always be set on a review-sourced task (the commit parser defaults `status` to `To Do`, but meeting drafts should never rely on defaults). Priority is not used — never set it. All other fields are optional — omit the line entirely if no value (do NOT write empty strings).
 - `area` is a bracketed list (1–2 values). Valid only for Coresynq-domain tasks.
 - `client` is a single value (school name). Valid only for Rezzy-domain tasks.
 - `source_spec` is a file path. Set when the task derives from a spec doc referenced in the transcript.
@@ -490,7 +489,7 @@ For each candidate meeting in the batch, run Steps 1–4 (bootstrap, carry-forwa
   idx, id, notion_url,
   triage: { title, summary, date, type, complexity, duration, attendees_primary, attendees_mentioned, domain, initiative_primary, initiative_secondary },
   sections: [{ title, decisions: [{ text, work_bearing }], context: [string] }],
-  tasks: [{ keep_status: 'green'|'yellow'|'red', title, initiative, priority, status, due, assignee, source, notes }],
+  tasks: [{ keep_status: 'green'|'yellow'|'red', title, initiative, status, due, assignee, source, notes }],
   ai_summary_raw: string
 }
 ```
