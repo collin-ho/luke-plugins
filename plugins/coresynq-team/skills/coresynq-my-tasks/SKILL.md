@@ -1,7 +1,7 @@
 ---
 name: coresynq-my-tasks
 description: List tasks in Coresynq Tasks DB assigned to the current user. Read-only — no changelog writes.
-allowed-tools: mcp__claude_ai_Notion__notion-search, mcp__claude_ai_Notion__notion-fetch, mcp__claude_ai_Notion__notion-get-users, mcp__plugin_luke-notion_luke-notion__dump-data-source
+allowed-tools: Bash, mcp__claude_ai_Notion__notion-search, mcp__claude_ai_Notion__notion-fetch, mcp__claude_ai_Notion__notion-get-users
 ---
 
 # Coresynq My Tasks Skill
@@ -29,19 +29,13 @@ Shows the current user's open tasks in `Coresynq Tasks`. Read-only.
    ```
    Then filter in-memory: Assignee includes self, Status not in [Done, Archived].
 
-   Exhaustive (when expected >100 rows):
+   Exhaustive (when expected >100 rows) — via the `ntn` CLI:
+   ```bash
+   ntn datasources query fdb7593f-5d8f-4119-8006-da4ed3f5d0d3 \
+     --filter '{"and":[{"property":"Assignee","people":{"contains":"<self user id>"}},{"property":"Status","select":{"does_not_equal":"Done"}},{"property":"Status","select":{"does_not_equal":"Archived"}}]}' \
+     --limit 100 --json
    ```
-   mcp__plugin_luke-notion_luke-notion__dump-data-source({
-     data_source_id: "fdb7593f-5d8f-4119-8006-da4ed3f5d0d3",
-     filter: {
-       "and": [
-         {"property": "Assignee", "people": {"contains": "<self user id>"}},
-         {"property": "Status", "select": {"does_not_equal": "Done"}},
-         {"property": "Status", "select": {"does_not_equal": "Archived"}}
-       ]
-     }
-   })
-   ```
+   Page with `--start-cursor <next_cursor>` until exhausted.
 
 3. **Group and present.** Group by Status; within each, sort by Priority (P0 → P3) then Due Date (oldest first). Render compactly:
 
@@ -68,7 +62,7 @@ Shows the current user's open tasks in `Coresynq Tasks`. Read-only.
 
 ## Reauth handling
 
-If any `mcp__claude_ai_Notion__*` or `mcp__plugin_luke-notion_luke-notion__*` call returns a 401-style error:
+If any `mcp__claude_ai_Notion__*` call returns a 401-style error:
 
 1. Tell the user: "Your Notion session expired. Open `/mcp` in Claude Code, find `claude.ai Notion`, and reconnect. Then retry."
 2. Do NOT proceed — wait for the user to confirm.

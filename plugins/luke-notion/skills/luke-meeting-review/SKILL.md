@@ -117,7 +117,7 @@ When the query returns results, present them immediately as a numbered list. Do 
 
 For each item the user assigns a Domain + Initiative:
 
-1. **Create a new task** in the matching domain's Tasks DB (Cogent / Coresynq / Rezzy / Personal — data source IDs in `/luke-add`). Copy over Title, Status, Priority, Due Date, Notes, Source Spec, Assignee, Legacy Task ID. Set Initiative to the resolved page URL.
+1. **Create a new task** in the matching domain's Tasks DB (Cogent / Coresynq / Rezzy / Personal — data-source IDs in the Notion Brain, `${CLAUDE_PLUGIN_ROOT}/README.md` §2). Copy over Title, Status, Priority, Due Date, Notes, Source Spec, Assignee, Legacy Task ID. Set Initiative to the resolved page URL.
 2. **Archive the Cortex Inbox row** via `mcp__claude_ai_Notion__notion-update-page` with `properties: {"Status": "Archived"}` and content_updates: `[{op: "trash"}]` (or set `Status: Archived` for soft-archive without trashing).
 
 If no untriaged items exist, skip silently and proceed to Step 1.
@@ -334,7 +334,7 @@ Then the **open-prompt escape hatch:**
 
 **Initiative-conditional field prompts:** for each task the user commits to keeping, apply these conditional prompts before writing it to the draft:
 
-- If the task's initiative name starts with `Coresynq – `: offer an Area value. First attempt auto-inference using the Coresynq keyword table documented in `/luke-add`'s "Domain-Specific Properties" section (e.g., `claim form` → Billing). If inference hits one or two Areas confidently, show them for user confirmation: *"Area: [Billing]? (y/edit/skip)"*. If inference is ambiguous or zero-hit, ask: *"Area? (pick from list, or skip)"* and offer the full Area list.
+- If the task's initiative name starts with `Coresynq – `: offer an Area value. Infer 1–2 Areas from the task content, matched against the **live** Coresynq Area options (fetch the Coresynq Tasks schema — don't assume a fixed list). If inference is confident, show for confirmation: *"Area: [Billing]? (y/edit/skip)"*. If ambiguous or zero-hit, ask: *"Area? (pick from list, or skip)"* and offer the live Area list.
 - If the task's initiative name starts with `Rezzy – ` OR `Rezzy External – `: ask: *"Client? (school name or skip)"*. No auto-inference — clients are usually named explicitly in the meeting if relevant.
 - Otherwise (Cogent, Personal, Work, or any other domain): no field prompt.
 

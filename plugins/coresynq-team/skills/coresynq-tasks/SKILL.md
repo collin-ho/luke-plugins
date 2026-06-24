@@ -1,7 +1,7 @@
 ---
 name: coresynq-tasks
 description: List all open tasks in Coresynq Tasks DB (team-wide view). Read-only — no changelog writes.
-allowed-tools: mcp__claude_ai_Notion__notion-search, mcp__claude_ai_Notion__notion-fetch, mcp__claude_ai_Notion__notion-get-users, mcp__plugin_luke-notion_luke-notion__dump-data-source
+allowed-tools: Bash, mcp__claude_ai_Notion__notion-search, mcp__claude_ai_Notion__notion-fetch, mcp__claude_ai_Notion__notion-get-users
 ---
 
 # Coresynq Tasks Skill (team-wide)
@@ -20,22 +20,15 @@ Shows the team's open tasks across `Coresynq Tasks`. Read-only. Use this for cro
    - "all assigned to <person>" — resolve the person via `notion-get-users` first
    - "all P0/P1 across the team"
 
-2. **Query.** Default to the bundled dump server (likely >100 rows on a healthy backlog):
+2. **Query** via the `ntn` CLI (paginates natively past the hosted 100-row cap):
 
-   ```
-   mcp__plugin_luke-notion_luke-notion__dump-data-source({
-     data_source_id: "fdb7593f-5d8f-4119-8006-da4ed3f5d0d3",
-     filter: {
-       "and": [
-         {"property": "Status", "select": {"does_not_equal": "Done"}},
-         {"property": "Status", "select": {"does_not_equal": "Archived"}}
-       ]
-     },
-     output_path: "/tmp/coresynq-open-tasks.json"
-   })
+   ```bash
+   ntn datasources query fdb7593f-5d8f-4119-8006-da4ed3f5d0d3 \
+     --filter '{"and":[{"property":"Status","select":{"does_not_equal":"Done"}},{"property":"Status","select":{"does_not_equal":"Archived"}}]}' \
+     --limit 100 --json > /tmp/coresynq-open-tasks.json
    ```
 
-   Extend filter with status / priority / assignee per user intent. Use `output_path` to avoid flooding the conversation with raw rows.
+   Page with `--start-cursor <next_cursor>` until exhausted. Extend the filter with status / priority / assignee per user intent. Write to a file to avoid flooding the conversation with raw rows.
 
 3. **Aggregate via `Bash` + `jq`** on the dump file. Don't paste raw rows into the conversation.
 
